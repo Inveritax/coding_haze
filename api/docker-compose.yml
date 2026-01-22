@@ -1,0 +1,62 @@
+# Docker Compose for Tax Scraper
+#
+# Setup:
+# 1. Copy .env.example to .env and configure your values
+# 2. Run: docker-compose up -d
+#
+# Environment variables are loaded from .env file
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: tax-scraper-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-tax_admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password required}
+      POSTGRES_DB: ${DB_NAME:-tax_scraper}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tax_admin} -d ${DB_NAME:-tax_scraper}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tax-scraper-api
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-tax_scraper}
+      DB_USER: ${DB_USER:-tax_admin}
+      DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      PORT: ${PORT:-4001}
+      NODE_ENV: ${NODE_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET:?JWT secret required}
+      MACHINE_TOKEN: ${MACHINE_TOKEN:-}
+    ports:
+      - "${PORT:-4001}:4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ../frontend-new
+      dockerfile: Dockerfile
+    container_name: tax-scraper-frontend
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:4001/api}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
