@@ -182,7 +182,13 @@ app.patch('/api/counties/:researchId', requireAuth, async (req, res) => {
       'notes',
       // General collection settings
       'default_delq_collector', 'default_escrow_collector',
-      'delq_search_start_date', 'default_escrow_search_start_date', 'tax_billing_date'
+      'delq_search_start_date', 'default_escrow_search_start_date', 'tax_billing_date',
+      // New fields for Tax Agency Hub restructure
+      'search_by_installments', 'tax_dates_notes',
+      'full_year_due_date', 'full_year_precommitment_date',
+      'full_year_finalize_balance_date', 'full_year_make_payment_due_date',
+      'tax_key_format_masked', 'tax_key_format_unmasked',
+      'alt_tax_key_format_masked', 'alt_tax_key_format_unmasked'
     ];
 
     if (!allowedFields.includes(field)) {
@@ -191,7 +197,9 @@ app.patch('/api/counties/:researchId', requireAuth, async (req, res) => {
 
     // Convert empty strings to null for date fields (PostgreSQL can't accept empty string for DATE)
     const dateFields = [
-      'delq_search_start_date', 'default_escrow_search_start_date', 'tax_billing_date'
+      'delq_search_start_date', 'default_escrow_search_start_date', 'tax_billing_date',
+      'full_year_due_date', 'full_year_precommitment_date',
+      'full_year_finalize_balance_date', 'full_year_make_payment_due_date'
     ];
     let processedValue = value;
     if (dateFields.includes(field) && value === '') {
@@ -272,64 +280,205 @@ app.get('/api/counties/:researchId/edit-history', requireAuth, async (req, res) 
   }
 });
 
-// Get installment details for a research record
+// ==================== INSTALLMENTS (NEW EXPANDABLE TABLE) ====================
+
+// Get all installments for a research result
 app.get('/api/counties/:researchId/installments', requireAuth, async (req, res) => {
   try {
     const researchId = req.params.researchId;
-    const installments = await db.getInstallmentDetails(researchId);
-
-    res.json({
-      success: true,
-      researchId: researchId,
-      installments: installments
-    });
+    const installments = await db.getInstallments(researchId);
+    res.json({ success: true, researchId, installments });
   } catch (error) {
-    console.error('Get installment details API error:', error);
+    console.error('Get installments API error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Update installment detail
-app.put('/api/counties/:researchId/installments/:installmentNumber', requireAuth, async (req, res) => {
+// Create new installment
+app.post('/api/counties/:researchId/installments', requireAuth, async (req, res) => {
   try {
-    const { researchId, installmentNumber } = req.params;
+    const researchId = req.params.researchId;
     const data = req.body;
 
-    const num = parseInt(installmentNumber);
-    if (num < 1 || num > 10) {
-      return res.status(400).json({ error: 'Installment number must be between 1 and 10' });
+    if (!data.installment_number) {
+      return res.status(400).json({ error: 'installment_number is required' });
     }
 
-    const result = await db.upsertInstallmentDetail(researchId, num, data);
-
-    res.json({
-      success: true,
-      installment: result
-    });
+    const installment = await db.createInstallment(researchId, data);
+    res.json({ success: true, installment });
   } catch (error) {
-    console.error('Update installment detail API error:', error);
+    console.error('Create installment API error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Delete installment detail
-app.delete('/api/counties/:researchId/installments/:installmentNumber', requireAuth, async (req, res) => {
+// Update installment by ID
+app.put('/api/installments/:installmentId', requireAuth, async (req, res) => {
   try {
-    const { researchId, installmentNumber } = req.params;
+    const installmentId = req.params.installmentId;
+    const data = req.body;
+    const installment = await db.updateInstallment(installmentId, data);
+    res.json({ success: true, installment });
+  } catch (error) {
+    console.error('Update installment API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
-    const num = parseInt(installmentNumber);
-    if (num < 1 || num > 10) {
-      return res.status(400).json({ error: 'Installment number must be between 1 and 10' });
+// Delete installment by ID
+app.delete('/api/installments/:installmentId', requireAuth, async (req, res) => {
+  try {
+    const installmentId = req.params.installmentId;
+    await db.deleteInstallment(installmentId);
+    res.json({ success: true, message: 'Installment deleted' });
+  } catch (error) {
+    console.error('Delete installment API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== CONTACTS (NEW EXPANDABLE TABLE) ====================
+
+// Get all contacts for a research result
+app.get('/api/counties/:researchId/contacts', requireAuth, async (req, res) => {
+  try {
+    const researchId = req.params.researchId;
+    const contacts = await db.getContacts(researchId);
+    res.json({ success: true, researchId, contacts });
+  } catch (error) {
+    console.error('Get contacts API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new contact
+app.post('/api/counties/:researchId/contacts', requireAuth, async (req, res) => {
+  try {
+    const researchId = req.params.researchId;
+    const data = req.body;
+    const contact = await db.createContact(researchId, data);
+    res.json({ success: true, contact });
+  } catch (error) {
+    console.error('Create contact API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update contact by ID
+app.put('/api/contacts/:contactId', requireAuth, async (req, res) => {
+  try {
+    const contactId = req.params.contactId;
+    const data = req.body;
+    const contact = await db.updateContact(contactId, data);
+    res.json({ success: true, contact });
+  } catch (error) {
+    console.error('Update contact API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete contact by ID
+app.delete('/api/contacts/:contactId', requireAuth, async (req, res) => {
+  try {
+    const contactId = req.params.contactId;
+    await db.deleteContact(contactId);
+    res.json({ success: true, message: 'Contact deleted' });
+  } catch (error) {
+    console.error('Delete contact API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reorder contacts
+app.put('/api/counties/:researchId/contacts/reorder', requireAuth, async (req, res) => {
+  try {
+    const researchId = req.params.researchId;
+    const { orderedIds } = req.body;
+
+    if (!Array.isArray(orderedIds)) {
+      return res.status(400).json({ error: 'orderedIds must be an array' });
     }
 
-    await db.deleteInstallmentDetail(researchId, num);
-
-    res.json({
-      success: true,
-      message: `Installment ${num} deleted`
-    });
+    await db.reorderContacts(researchId, orderedIds);
+    res.json({ success: true, message: 'Contacts reordered' });
   } catch (error) {
-    console.error('Delete installment detail API error:', error);
+    console.error('Reorder contacts API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get contact types for dropdown
+app.get('/api/contact-types', requireAuth, async (req, res) => {
+  try {
+    const types = await db.getContactTypes();
+    // Return default types if none exist
+    const defaultTypes = ['primary', 'secondary', 'billing', 'technical', 'emergency', 'other'];
+    res.json({ success: true, types: types.length > 0 ? types : defaultTypes });
+  } catch (error) {
+    console.error('Get contact types API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== FEES (NEW EXPANDABLE TABLE) ====================
+
+// Get all fees for a research result
+app.get('/api/counties/:researchId/fees', requireAuth, async (req, res) => {
+  try {
+    const researchId = req.params.researchId;
+    const fees = await db.getFees(researchId);
+    res.json({ success: true, researchId, fees });
+  } catch (error) {
+    console.error('Get fees API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new fee
+app.post('/api/counties/:researchId/fees', requireAuth, async (req, res) => {
+  try {
+    const researchId = req.params.researchId;
+    const data = req.body;
+    const fee = await db.createFee(researchId, data);
+    res.json({ success: true, fee });
+  } catch (error) {
+    console.error('Create fee API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update fee by ID
+app.put('/api/fees/:feeId', requireAuth, async (req, res) => {
+  try {
+    const feeId = req.params.feeId;
+    const data = req.body;
+    const fee = await db.updateFee(feeId, data);
+    res.json({ success: true, fee });
+  } catch (error) {
+    console.error('Update fee API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete fee by ID
+app.delete('/api/fees/:feeId', requireAuth, async (req, res) => {
+  try {
+    const feeId = req.params.feeId;
+    await db.deleteFee(feeId);
+    res.json({ success: true, message: 'Fee deleted' });
+  } catch (error) {
+    console.error('Delete fee API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get fee types for dropdown
+app.get('/api/fee-types', requireAuth, async (req, res) => {
+  try {
+    const types = await db.getFeeTypes();
+    res.json({ success: true, types });
+  } catch (error) {
+    console.error('Get fee types API error:', error);
     res.status(500).json({ error: error.message });
   }
 });

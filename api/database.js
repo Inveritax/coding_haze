@@ -520,6 +520,342 @@ class PostgresDatabase {
     }
   }
 
+  // ==================== NEW TABLE METHODS ====================
+
+  // Get installments for a research result (new expandable table)
+  async getInstallments(researchResultId) {
+    try {
+      const result = await this.pool.query(`
+        SELECT *
+        FROM installments
+        WHERE research_result_id = $1
+        ORDER BY installment_number
+      `, [researchResultId]);
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting installments:', error);
+      throw error;
+    }
+  }
+
+  // Create installment
+  async createInstallment(researchResultId, data) {
+    const client = await this.pool.connect();
+    try {
+      const query = `
+        INSERT INTO installments (
+          research_result_id, installment_number, due_date,
+          delq_collector, escrow_collector, escrow_search_start_date,
+          tax_billing_date, precommitment_date, finalize_balance_date,
+          make_payment_due_date, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *;
+      `;
+      const result = await client.query(query, [
+        researchResultId,
+        data.installment_number,
+        data.due_date || null,
+        data.delq_collector || null,
+        data.escrow_collector || null,
+        data.escrow_search_start_date || null,
+        data.tax_billing_date || null,
+        data.precommitment_date || null,
+        data.finalize_balance_date || null,
+        data.make_payment_due_date || null,
+        data.notes || null
+      ]);
+      return result.rows[0];
+    } finally {
+      client.release();
+    }
+  }
+
+  // Update installment
+  async updateInstallment(installmentId, data) {
+    const client = await this.pool.connect();
+    try {
+      const query = `
+        UPDATE installments SET
+          due_date = $2,
+          delq_collector = $3,
+          escrow_collector = $4,
+          escrow_search_start_date = $5,
+          tax_billing_date = $6,
+          precommitment_date = $7,
+          finalize_balance_date = $8,
+          make_payment_due_date = $9,
+          notes = $10,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING *;
+      `;
+      const result = await client.query(query, [
+        installmentId,
+        data.due_date || null,
+        data.delq_collector || null,
+        data.escrow_collector || null,
+        data.escrow_search_start_date || null,
+        data.tax_billing_date || null,
+        data.precommitment_date || null,
+        data.finalize_balance_date || null,
+        data.make_payment_due_date || null,
+        data.notes || null
+      ]);
+      return result.rows[0];
+    } finally {
+      client.release();
+    }
+  }
+
+  // Delete installment
+  async deleteInstallment(installmentId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('DELETE FROM installments WHERE id = $1', [installmentId]);
+    } finally {
+      client.release();
+    }
+  }
+
+  // Get contacts for a research result
+  async getContacts(researchResultId) {
+    try {
+      const result = await this.pool.query(`
+        SELECT *
+        FROM contacts
+        WHERE research_result_id = $1
+        ORDER BY sort_order, contact_type
+      `, [researchResultId]);
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting contacts:', error);
+      throw error;
+    }
+  }
+
+  // Create contact
+  async createContact(researchResultId, data) {
+    const client = await this.pool.connect();
+    try {
+      const query = `
+        INSERT INTO contacts (
+          research_result_id, contact_type, sort_order, name, title,
+          phone, email, physical_address, mailing_address,
+          general_phone, fax, website, tax_search_website, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        RETURNING *;
+      `;
+      const result = await client.query(query, [
+        researchResultId,
+        data.contact_type || 'primary',
+        data.sort_order || 0,
+        data.name || null,
+        data.title || null,
+        data.phone || null,
+        data.email || null,
+        data.physical_address || null,
+        data.mailing_address || null,
+        data.general_phone || null,
+        data.fax || null,
+        data.website || null,
+        data.tax_search_website || null,
+        data.notes || null
+      ]);
+      return result.rows[0];
+    } finally {
+      client.release();
+    }
+  }
+
+  // Update contact
+  async updateContact(contactId, data) {
+    const client = await this.pool.connect();
+    try {
+      const query = `
+        UPDATE contacts SET
+          contact_type = $2,
+          sort_order = $3,
+          name = $4,
+          title = $5,
+          phone = $6,
+          email = $7,
+          physical_address = $8,
+          mailing_address = $9,
+          general_phone = $10,
+          fax = $11,
+          website = $12,
+          tax_search_website = $13,
+          notes = $14,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING *;
+      `;
+      const result = await client.query(query, [
+        contactId,
+        data.contact_type || 'primary',
+        data.sort_order || 0,
+        data.name || null,
+        data.title || null,
+        data.phone || null,
+        data.email || null,
+        data.physical_address || null,
+        data.mailing_address || null,
+        data.general_phone || null,
+        data.fax || null,
+        data.website || null,
+        data.tax_search_website || null,
+        data.notes || null
+      ]);
+      return result.rows[0];
+    } finally {
+      client.release();
+    }
+  }
+
+  // Delete contact
+  async deleteContact(contactId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('DELETE FROM contacts WHERE id = $1', [contactId]);
+    } finally {
+      client.release();
+    }
+  }
+
+  // Reorder contacts
+  async reorderContacts(researchResultId, orderedIds) {
+    const client = await this.pool.connect();
+    try {
+      for (let i = 0; i < orderedIds.length; i++) {
+        await client.query(
+          'UPDATE contacts SET sort_order = $1 WHERE id = $2 AND research_result_id = $3',
+          [i, orderedIds[i], researchResultId]
+        );
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  // Get fees for a research result
+  async getFees(researchResultId) {
+    try {
+      const result = await this.pool.query(`
+        SELECT *
+        FROM fees
+        WHERE research_result_id = $1
+        ORDER BY fee_category, fee_number
+      `, [researchResultId]);
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting fees:', error);
+      throw error;
+    }
+  }
+
+  // Create fee
+  async createFee(researchResultId, data) {
+    const client = await this.pool.connect();
+    try {
+      const query = `
+        INSERT INTO fees (
+          research_result_id, fee_category, fee_number, fee_type, fee_amount, notes
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *;
+      `;
+      const result = await client.query(query, [
+        researchResultId,
+        data.fee_category || 'delq',
+        data.fee_number || 1,
+        data.fee_type || null,
+        data.fee_amount || null,
+        data.notes || null
+      ]);
+      return result.rows[0];
+    } finally {
+      client.release();
+    }
+  }
+
+  // Update fee
+  async updateFee(feeId, data) {
+    const client = await this.pool.connect();
+    try {
+      const query = `
+        UPDATE fees SET
+          fee_category = $2,
+          fee_number = $3,
+          fee_type = $4,
+          fee_amount = $5,
+          notes = $6,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING *;
+      `;
+      const result = await client.query(query, [
+        feeId,
+        data.fee_category || 'delq',
+        data.fee_number || 1,
+        data.fee_type || null,
+        data.fee_amount || null,
+        data.notes || null
+      ]);
+      return result.rows[0];
+    } finally {
+      client.release();
+    }
+  }
+
+  // Delete fee
+  async deleteFee(feeId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('DELETE FROM fees WHERE id = $1', [feeId]);
+    } finally {
+      client.release();
+    }
+  }
+
+  // Get fee types (distinct values for dropdown)
+  async getFeeTypes() {
+    try {
+      const result = await this.pool.query(`
+        SELECT DISTINCT fee_type
+        FROM fees
+        WHERE fee_type IS NOT NULL
+        ORDER BY fee_type
+      `);
+      return result.rows.map(r => r.fee_type);
+    } catch (error) {
+      console.error('Error getting fee types:', error);
+      throw error;
+    }
+  }
+
+  // Get contact types (distinct values for dropdown)
+  async getContactTypes() {
+    try {
+      const result = await this.pool.query(`
+        SELECT DISTINCT contact_type
+        FROM contacts
+        WHERE contact_type IS NOT NULL
+        ORDER BY
+          CASE contact_type
+            WHEN 'primary' THEN 1
+            WHEN 'secondary' THEN 2
+            WHEN 'billing' THEN 3
+            WHEN 'technical' THEN 4
+            WHEN 'emergency' THEN 5
+            ELSE 6
+          END
+      `);
+      return result.rows.map(r => r.contact_type);
+    } catch (error) {
+      console.error('Error getting contact types:', error);
+      throw error;
+    }
+  }
+
   async close() {
     await this.pool.end();
   }
