@@ -25,18 +25,26 @@ import {
   UserSearch,
   Copy,
   RefreshCw,
-  GitBranch
+  GitBranch,
+  Hash,
+  DollarSign,
+  Archive
 } from 'lucide-vue-next'
 
-// Tab components
+// Tab components - New structure
 import OverviewTab from '../components/tabs/OverviewTab.vue'
+import DatesTab from '../components/tabs/DatesTab.vue'
+import TaxKeyTab from '../components/tabs/TaxKeyTab.vue'
+import ContactsTab from '../components/tabs/ContactsTab.vue'
+import FeesTab from '../components/tabs/FeesTab.vue'
+import HistoryTab from '../components/tabs/HistoryTab.vue'
+import VersionsTab from '../components/tabs/VersionsTab.vue'
+// Legacy tabs (for archived fields view)
 import TaxInfoTab from '../components/tabs/TaxInfoTab.vue'
 import ContactTab from '../components/tabs/ContactTab.vue'
 import AddressTab from '../components/tabs/AddressTab.vue'
 import OnlineTab from '../components/tabs/OnlineTab.vue'
 import AdditionalTab from '../components/tabs/AdditionalTab.vue'
-import HistoryTab from '../components/tabs/HistoryTab.vue'
-import VersionsTab from '../components/tabs/VersionsTab.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -107,29 +115,53 @@ const totalPages = ref(1)
 const totalCount = ref(0)
 const perPage = ref(25)
 
-// Tab configuration
-const tabs = [
+// Show archived fields toggle
+const showArchivedTabs = ref(false)
+
+// Tab configuration - New structure
+const mainTabs = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
-  { id: 'tax', label: 'Tax Info', icon: Calendar },
-  { id: 'contact', label: 'Contact', icon: Users },
-  { id: 'address', label: 'Address', icon: MapPin },
-  { id: 'online', label: 'Online', icon: Globe },
-  { id: 'additional', label: 'Additional', icon: FileText },
+  { id: 'dates', label: 'Dates', icon: Calendar },
+  { id: 'taxkey', label: 'TK#', icon: Hash },
+  { id: 'contacts', label: 'Contacts', icon: Users },
+  { id: 'fees', label: 'Fees', icon: DollarSign },
   { id: 'history', label: 'History', icon: History },
   { id: 'versions', label: 'Versions', icon: GitBranch }
 ]
+
+// Legacy tabs for archived fields
+const archivedTabs = [
+  { id: 'tax', label: 'Tax Info (Legacy)', icon: Calendar },
+  { id: 'contact', label: 'Contact (Legacy)', icon: Users },
+  { id: 'address', label: 'Address (Legacy)', icon: MapPin },
+  { id: 'online', label: 'Online (Legacy)', icon: Globe },
+  { id: 'additional', label: 'Additional (Legacy)', icon: FileText }
+]
+
+// Combined tabs based on archive toggle
+const tabs = computed(() => {
+  if (showArchivedTabs.value) {
+    return [...mainTabs, ...archivedTabs]
+  }
+  return mainTabs
+})
 
 // Current tab component
 const currentTabComponent = computed(() => {
   const components = {
     overview: OverviewTab,
+    dates: DatesTab,
+    taxkey: TaxKeyTab,
+    contacts: ContactsTab,
+    fees: FeesTab,
+    history: HistoryTab,
+    versions: VersionsTab,
+    // Legacy components
     tax: TaxInfoTab,
     contact: ContactTab,
     address: AddressTab,
     online: OnlineTab,
-    additional: AdditionalTab,
-    history: HistoryTab,
-    versions: VersionsTab
+    additional: AdditionalTab
   }
   return components[activeTab.value]
 })
@@ -674,10 +706,27 @@ onMounted(() => {
           </div>
           <div v-else class="text-gray-500">Select a county to edit</div>
 
-          <!-- Saving indicator -->
-          <div v-if="isSaving" class="flex items-center gap-2 text-primary-600">
-            <Loader2 class="w-4 h-4 animate-spin" />
-            <span class="text-sm">Saving...</span>
+          <div class="flex items-center gap-4">
+            <!-- Saving indicator -->
+            <div v-if="isSaving" class="flex items-center gap-2 text-primary-600">
+              <Loader2 class="w-4 h-4 animate-spin" />
+              <span class="text-sm">Saving...</span>
+            </div>
+
+            <!-- Archive toggle -->
+            <button
+              @click="showArchivedTabs = !showArchivedTabs"
+              :class="[
+                'flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg transition-colors',
+                showArchivedTabs
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              ]"
+              title="Show/hide archived fields"
+            >
+              <Archive class="w-4 h-4" />
+              {{ showArchivedTabs ? 'Hide Archived' : 'Show Archived' }}
+            </button>
           </div>
         </div>
 

@@ -115,18 +115,70 @@ export default {
     return apiClient.get(`/counties/${researchId}/edit-history`)
   },
 
-  getInstallmentDetails(researchId) {
+  // Installments (expandable table)
+  getInstallments(researchId) {
     return apiClient.get(`/counties/${researchId}/installments`)
   },
 
-  updateInstallmentDetail(researchId, installmentNumber, data) {
-    return apiClient.put(`/counties/${researchId}/installments/${installmentNumber}`, data)
+  createInstallment(researchId, data) {
+    return apiClient.post(`/counties/${researchId}/installments`, data)
   },
 
-  deleteInstallmentDetail(researchId, installmentNumber) {
-    return apiClient.delete(`/counties/${researchId}/installments/${installmentNumber}`)
+  updateInstallment(installmentId, data) {
+    return apiClient.put(`/installments/${installmentId}`, data)
   },
 
+  deleteInstallment(installmentId) {
+    return apiClient.delete(`/installments/${installmentId}`)
+  },
+
+  // Contacts (expandable table)
+  getContacts(researchId) {
+    return apiClient.get(`/counties/${researchId}/contacts`)
+  },
+
+  createContact(researchId, data) {
+    return apiClient.post(`/counties/${researchId}/contacts`, data)
+  },
+
+  updateContact(contactId, data) {
+    return apiClient.put(`/contacts/${contactId}`, data)
+  },
+
+  deleteContact(contactId) {
+    return apiClient.delete(`/contacts/${contactId}`)
+  },
+
+  reorderContacts(researchId, orderedIds) {
+    return apiClient.put(`/counties/${researchId}/contacts/reorder`, { orderedIds })
+  },
+
+  getContactTypes() {
+    return apiClient.get('/contact-types')
+  },
+
+  // Fees (expandable table)
+  getFees(researchId) {
+    return apiClient.get(`/counties/${researchId}/fees`)
+  },
+
+  createFee(researchId, data) {
+    return apiClient.post(`/counties/${researchId}/fees`, data)
+  },
+
+  updateFee(feeId, data) {
+    return apiClient.put(`/fees/${feeId}`, data)
+  },
+
+  deleteFee(feeId) {
+    return apiClient.delete(`/fees/${feeId}`)
+  },
+
+  getFeeTypes() {
+    return apiClient.get('/fee-types')
+  },
+
+  // Research versions
   getResearchVersions(researchId) {
     return apiClient.get(`/counties/${researchId}/versions`)
   },
