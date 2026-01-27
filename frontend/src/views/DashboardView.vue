@@ -128,8 +128,8 @@ const showArchivedTabs = ref(false)
 const mainTabs = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'dates', label: 'Dates', icon: Calendar },
-  { id: 'taxkey', label: 'TK#', icon: Hash },
   { id: 'contacts', label: 'Contacts', icon: Users },
+  { id: 'taxkey', label: 'TK#', icon: Hash },
   { id: 'fees', label: 'Fees', icon: DollarSign },
   { id: 'payment', label: 'Payment', icon: CreditCard },
   { id: 'history', label: 'History', icon: History },
