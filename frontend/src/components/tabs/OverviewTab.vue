@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   Calendar,
   Hash,
@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-vue-next'
+import api from '../../services/api'
 
 const props = defineProps({
   county: {
@@ -27,21 +28,44 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate-tab'])
 
+// Data from new relational tables
+const primaryContact = ref(null)
+const installmentsList = ref([])
+
+// Load contacts and installments when county changes
+watch(() => props.county, async (newCounty) => {
+  if (newCounty?.research_id) {
+    try {
+      const [contactRes, installmentRes] = await Promise.all([
+        api.getContacts(newCounty.research_id),
+        api.getInstallments(newCounty.research_id)
+      ])
+      const contacts = contactRes.data.contacts || []
+      primaryContact.value = contacts.find(c => c.contact_type === 'primary') || contacts[0] || null
+      installmentsList.value = (installmentRes.data.installments || []).sort((a, b) => a.installment_number - b.installment_number)
+    } catch (err) {
+      console.error('Failed to load overview data:', err)
+      primaryContact.value = null
+      installmentsList.value = []
+    }
+  }
+}, { immediate: true })
+
 // Computed properties for display
 const displayName = computed(() => props.county.municipality_name || props.county.county_name)
 const jurisdictionLabel = computed(() => props.county.jurisdiction_type === 'municipality' ? 'Municipality' : 'County')
 
-// Check if data exists
+// Check if data exists (from new tables)
+const pc = computed(() => primaryContact.value)
 const hasTaxInfo = computed(() => props.county.current_tax_year || props.county.num_installments)
-const hasContact = computed(() => props.county.primary_contact_name || props.county.primary_contact_phone || props.county.primary_contact_email)
-const hasAddresses = computed(() => props.county.tax_authority_physical_address || props.county.tax_authority_mailing_address)
-const hasOnline = computed(() => props.county.web_address || props.county.county_website || props.county.pay_taxes_url)
-const hasAdditional = computed(() => props.county.general_phone_number || props.county.fax_number || props.county.notes)
+const hasContact = computed(() => pc.value?.name || pc.value?.phone || pc.value?.email)
+const hasAddresses = computed(() => pc.value?.physical_address || pc.value?.mailing_address)
+const hasOnline = computed(() => pc.value?.tax_search_website || pc.value?.website || props.county.pay_taxes_url)
+const hasAdditional = computed(() => pc.value?.general_phone || pc.value?.fax || props.county.notes)
 
 // Format date for display
 function formatDate(dateStr) {
   if (!dateStr) return ''
-  // Check if it's an ISO date string
   if (dateStr.includes('T') || dateStr.includes('-')) {
     try {
       const date = new Date(dateStr)
@@ -52,20 +76,14 @@ function formatDate(dateStr) {
       // Fall through to return original
     }
   }
-  // Return as-is if not a parseable date (could be "VARIES", "TBD", etc.)
   return dateStr
 }
 
-// Get due dates as array
+// Get due dates from installments table
 const dueDates = computed(() => {
-  const dates = []
-  const num = parseInt(props.county.num_installments) || 0
-  for (let i = 1; i <= Math.min(num, 10); i++) {
-    if (props.county[`due_date_${i}`]) {
-      dates.push({ num: i, date: props.county[`due_date_${i}`], formatted: formatDate(props.county[`due_date_${i}`]) })
-    }
-  }
-  return dates
+  return installmentsList.value
+    .filter(inst => inst.due_date)
+    .map(inst => ({ num: inst.installment_number, date: inst.due_date, formatted: formatDate(inst.due_date) }))
 })
 
 // Completion status with tab navigation
@@ -74,11 +92,11 @@ const completionItems = computed(() => {
     { label: 'Tax Year', complete: !!props.county.current_tax_year, tab: 'tax' },
     { label: 'Installments', complete: !!props.county.num_installments, tab: 'tax' },
     { label: 'Due Dates', complete: dueDates.value.length > 0, tab: 'tax' },
-    { label: 'Contact', complete: !!props.county.primary_contact_name, tab: 'contact' },
-    { label: 'Phone', complete: !!props.county.primary_contact_phone || !!props.county.general_phone_number, tab: 'additional' },
-    { label: 'Email', complete: !!props.county.primary_contact_email, tab: 'contact' },
-    { label: 'Address', complete: !!props.county.tax_authority_physical_address, tab: 'address' },
-    { label: 'Website', complete: !!props.county.web_address || !!props.county.county_website, tab: 'online' },
+    { label: 'Contact', complete: !!pc.value?.name, tab: 'contact' },
+    { label: 'Phone', complete: !!pc.value?.phone || !!pc.value?.general_phone, tab: 'additional' },
+    { label: 'Email', complete: !!pc.value?.email, tab: 'contact' },
+    { label: 'Address', complete: !!pc.value?.physical_address, tab: 'address' },
+    { label: 'Website', complete: !!pc.value?.tax_search_website || !!pc.value?.website, tab: 'online' },
     { label: 'Payment URL', complete: !!props.county.pay_taxes_url, tab: 'online' }
   ]
 })
@@ -208,25 +226,25 @@ function openUrl(url) {
         </div>
         <div class="p-4">
           <div v-if="hasContact" class="space-y-3">
-            <div v-if="county.primary_contact_name" class="flex items-start gap-3">
+            <div v-if="pc?.name" class="flex items-start gap-3">
               <div class="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
                 <User class="w-5 h-5 text-primary-600" />
               </div>
               <div>
-                <p class="font-medium text-gray-900">{{ county.primary_contact_name }}</p>
-                <p v-if="county.primary_contact_title" class="text-sm text-gray-500">{{ county.primary_contact_title }}</p>
+                <p class="font-medium text-gray-900">{{ pc.name }}</p>
+                <p v-if="pc.title" class="text-sm text-gray-500">{{ pc.title }}</p>
               </div>
             </div>
 
             <div class="space-y-2 mt-3">
-              <div v-if="county.primary_contact_phone" class="flex items-center gap-2 text-sm">
+              <div v-if="pc?.phone" class="flex items-center gap-2 text-sm">
                 <Phone class="w-4 h-4 text-gray-400" />
-                <span class="text-gray-700">{{ county.primary_contact_phone }}</span>
+                <span class="text-gray-700">{{ pc.phone }}</span>
               </div>
-              <div v-if="county.primary_contact_email" class="flex items-center gap-2 text-sm">
+              <div v-if="pc?.email" class="flex items-center gap-2 text-sm">
                 <Mail class="w-4 h-4 text-gray-400" />
-                <a :href="`mailto:${county.primary_contact_email}`" class="text-primary-600 hover:underline">
-                  {{ county.primary_contact_email }}
+                <a :href="`mailto:${pc.email}`" class="text-primary-600 hover:underline">
+                  {{ pc.email }}
                 </a>
               </div>
             </div>
@@ -245,19 +263,19 @@ function openUrl(url) {
         </div>
         <div class="p-4">
           <div v-if="hasAddresses" class="grid grid-cols-2 gap-4">
-            <div v-if="county.tax_authority_physical_address">
+            <div v-if="pc?.physical_address">
               <p class="text-xs text-gray-500 uppercase font-medium mb-2 flex items-center gap-1">
                 <Building class="w-3.5 h-3.5" />
                 Physical
               </p>
-              <p class="text-sm text-gray-700 whitespace-pre-line">{{ county.tax_authority_physical_address }}</p>
+              <p class="text-sm text-gray-700 whitespace-pre-line">{{ pc.physical_address }}</p>
             </div>
-            <div v-if="county.tax_authority_mailing_address">
+            <div v-if="pc?.mailing_address">
               <p class="text-xs text-gray-500 uppercase font-medium mb-2 flex items-center gap-1">
                 <MapPin class="w-3.5 h-3.5" />
                 Mailing
               </p>
-              <p class="text-sm text-gray-700 whitespace-pre-line">{{ county.tax_authority_mailing_address }}</p>
+              <p class="text-sm text-gray-700 whitespace-pre-line">{{ pc.mailing_address }}</p>
             </div>
           </div>
           <div v-else class="text-center py-4 text-gray-400 text-sm">
@@ -275,8 +293,8 @@ function openUrl(url) {
         <div class="p-4">
           <div v-if="hasOnline" class="space-y-3">
             <button
-              v-if="county.web_address"
-              @click="openUrl(county.web_address)"
+              v-if="pc?.tax_search_website"
+              @click="openUrl(pc.tax_search_website)"
               class="flex items-center gap-3 w-full p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left"
             >
               <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -284,14 +302,14 @@ function openUrl(url) {
               </div>
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-medium text-gray-900">Main Website</p>
-                <p class="text-xs text-gray-500 truncate">{{ county.web_address }}</p>
+                <p class="text-xs text-gray-500 truncate">{{ pc.tax_search_website }}</p>
               </div>
               <ExternalLink class="w-4 h-4 text-gray-400" />
             </button>
 
             <button
-              v-if="county.county_website"
-              @click="openUrl(county.county_website)"
+              v-if="pc?.website"
+              @click="openUrl(pc.website)"
               class="flex items-center gap-3 w-full p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-left"
             >
               <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -299,7 +317,7 @@ function openUrl(url) {
               </div>
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-medium text-gray-900">County Website</p>
-                <p class="text-xs text-gray-500 truncate">{{ county.county_website }}</p>
+                <p class="text-xs text-gray-500 truncate">{{ pc.website }}</p>
               </div>
               <ExternalLink class="w-4 h-4 text-gray-400" />
             </button>
@@ -336,23 +354,23 @@ function openUrl(url) {
         <div v-if="hasAdditional">
           <div class="grid grid-cols-3 gap-6">
             <!-- Phone Numbers -->
-            <div v-if="county.general_phone_number" class="flex items-center gap-3">
+            <div v-if="pc?.general_phone" class="flex items-center gap-3">
               <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Phone class="w-5 h-5 text-green-600" />
               </div>
               <div>
                 <p class="text-xs text-gray-500">General Phone</p>
-                <p class="text-sm font-medium text-gray-900">{{ county.general_phone_number }}</p>
+                <p class="text-sm font-medium text-gray-900">{{ pc.general_phone }}</p>
               </div>
             </div>
 
-            <div v-if="county.fax_number" class="flex items-center gap-3">
+            <div v-if="pc?.fax" class="flex items-center gap-3">
               <div class="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Printer class="w-5 h-5 text-blue-600" />
               </div>
               <div>
                 <p class="text-xs text-gray-500">Fax Number</p>
-                <p class="text-sm font-medium text-gray-900">{{ county.fax_number }}</p>
+                <p class="text-sm font-medium text-gray-900">{{ pc.fax }}</p>
               </div>
             </div>
           </div>
