@@ -28,7 +28,10 @@ import {
   GitBranch,
   Hash,
   DollarSign,
-  Archive
+  Archive,
+  ClipboardList,
+  ListOrdered,
+  CreditCard
 } from 'lucide-vue-next'
 
 // Tab components - New structure
@@ -45,6 +48,9 @@ import ContactTab from '../components/tabs/ContactTab.vue'
 import AddressTab from '../components/tabs/AddressTab.vue'
 import OnlineTab from '../components/tabs/OnlineTab.vue'
 import AdditionalTab from '../components/tabs/AdditionalTab.vue'
+import PaymentInfoTab from '../components/tabs/PaymentInfoTab.vue'
+import SurveysTab from '../components/tabs/SurveysTab.vue'
+import QueueTab from '../components/tabs/QueueTab.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -125,8 +131,11 @@ const mainTabs = [
   { id: 'taxkey', label: 'TK#', icon: Hash },
   { id: 'contacts', label: 'Contacts', icon: Users },
   { id: 'fees', label: 'Fees', icon: DollarSign },
+  { id: 'payment', label: 'Payment', icon: CreditCard },
   { id: 'history', label: 'History', icon: History },
-  { id: 'versions', label: 'Versions', icon: GitBranch }
+  { id: 'versions', label: 'Versions', icon: GitBranch },
+  { id: 'surveys', label: 'Surveys', icon: ClipboardList },
+  { id: 'queue', label: 'Queue', icon: ListOrdered }
 ]
 
 // Legacy tabs for archived fields
@@ -154,6 +163,7 @@ const currentTabComponent = computed(() => {
     taxkey: TaxKeyTab,
     contacts: ContactsTab,
     fees: FeesTab,
+    payment: PaymentInfoTab,
     history: HistoryTab,
     versions: VersionsTab,
     // Legacy components
@@ -161,7 +171,10 @@ const currentTabComponent = computed(() => {
     contact: ContactTab,
     address: AddressTab,
     online: OnlineTab,
-    additional: AdditionalTab
+    additional: AdditionalTab,
+    // Global tabs
+    surveys: SurveysTab,
+    queue: QueueTab
   }
   return components[activeTab.value]
 })
@@ -242,6 +255,10 @@ async function fetchCounties() {
 // Select a county
 function selectCounty(county) {
   selectedCounty.value = county
+  // Switch away from global tabs when selecting a county
+  if (activeTab.value === 'surveys' || activeTab.value === 'queue') {
+    activeTab.value = 'overview'
+  }
 }
 
 // Open history tab for a county (when clicking pencil icon)
@@ -575,9 +592,9 @@ onMounted(() => {
               isSidebarCollapsed ? 'p-2' : 'px-4 py-3',
               selectedCounty?.research_id === county.research_id
                 ? 'bg-primary-50 border-l-4 border-primary-600'
-                : county.jurisdiction_type === 'county'
-                  ? 'bg-amber-50/50 hover:bg-amber-100/50 border-l-4 border-transparent'
-                  : 'hover:bg-gray-50 border-l-4 border-transparent'
+                : (county.has_audit_entries || county.method_used === 'propagated_from_county')
+                  ? 'bg-green-50 hover:bg-green-100/70 border-l-4 border-transparent'
+                  : 'bg-white hover:bg-gray-50 border-l-4 border-transparent'
             ]"
           >
             <div v-if="isSidebarCollapsed" class="flex items-center justify-center">
@@ -587,7 +604,7 @@ onMounted(() => {
             </div>
             <div v-else>
               <div class="flex items-center gap-2">
-                <span class="font-medium text-gray-900">{{ county.municipality_name || county.county_name }}</span>
+                <span :class="county.jurisdiction_type === 'county' ? 'font-bold underline text-gray-900' : 'font-medium text-gray-900'">{{ county.municipality_name || county.county_name }}</span>
                 <span class="flex-shrink-0 px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded">
                   {{ county.state }}
                 </span>
@@ -606,7 +623,7 @@ onMounted(() => {
               <div class="flex items-center gap-2 mt-0.5">
                 <span class="text-xs text-gray-400">
                   <template v-if="county.jurisdiction_type === 'municipality'">
-                    {{ county.county_name }} County
+                    {{ county.county_name.endsWith(' County') ? county.county_name : county.county_name + ' County' }}
                   </template>
                   <template v-else>
                     County
@@ -751,7 +768,11 @@ onMounted(() => {
 
       <!-- Tab Content -->
       <div class="flex-1 overflow-y-auto p-6">
-        <div v-if="!selectedCounty" class="flex items-center justify-center h-full">
+        <!-- Global tabs (no county needed) -->
+        <SurveysTab v-if="activeTab === 'surveys'" />
+        <QueueTab v-else-if="activeTab === 'queue'" />
+
+        <div v-else-if="!selectedCounty" class="flex items-center justify-center h-full">
           <div class="text-center">
             <Building2 class="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 class="text-lg font-medium text-gray-900 mb-2">No County Selected</h3>

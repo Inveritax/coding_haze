@@ -17,6 +17,11 @@ const routes = [
     name: "Dashboard",
     component: () => import("./views/DashboardView.vue"),
     meta: { requiresAuth: true }
+  },
+  {
+    path: "/survey/:uniqueId",
+    name: "Survey",
+    component: () => import("./views/SurveyView.vue")
   }
 ]
 

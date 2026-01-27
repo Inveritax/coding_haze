@@ -188,7 +188,17 @@ app.patch('/api/counties/:researchId', requireAuth, async (req, res) => {
       'full_year_due_date', 'full_year_precommitment_date',
       'full_year_finalize_balance_date', 'full_year_make_payment_due_date',
       'tax_key_format_masked', 'tax_key_format_unmasked',
-      'alt_tax_key_format_masked', 'alt_tax_key_format_unmasked'
+      'alt_tax_key_format_masked', 'alt_tax_key_format_unmasked',
+      // Payment Info fields
+      'pmt_preferred_method', 'pmt_bulk_upload_allowed', 'pmt_bulk_upload_format',
+      'pmt_tax_roll_required', 'pmt_tax_roll_cost',
+      'pmt_third_party_name', 'pmt_third_party_fee', 'pmt_third_party_file_format',
+      'pmt_original_bill_required', 'pmt_how_to_obtain_bill',
+      'pmt_duplicate_bill_fee_yn', 'pmt_duplicate_bill_fee',
+      'pmt_precommit_required', 'pmt_precommit_file_format',
+      'pmt_method_wire', 'pmt_method_ach', 'pmt_method_check', 'pmt_method_other',
+      'pmt_wire_instructions', 'pmt_ach_instructions', 'pmt_check_instructions', 'pmt_other_instructions',
+      'pmt_wire_ach_contact_name', 'pmt_wire_ach_contact_info', 'pmt_notes'
     ];
 
     if (!allowedFields.includes(field)) {
@@ -613,6 +623,345 @@ app.get('/api/export/csv', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Export CSV API error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== SURVEY CONFIGS ====================
+
+// List all survey configs
+app.get('/api/survey-configs', requireAuth, async (req, res) => {
+  try {
+    const configs = await db.getSurveyConfigs();
+    res.json({ success: true, configs });
+  } catch (error) {
+    console.error('Get survey configs API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single survey config
+app.get('/api/survey-configs/:id', requireAuth, async (req, res) => {
+  try {
+    const config = await db.getSurveyConfig(req.params.id);
+    if (!config) {
+      return res.status(404).json({ error: 'Survey config not found' });
+    }
+    res.json({ success: true, config });
+  } catch (error) {
+    console.error('Get survey config API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create survey config
+app.post('/api/survey-configs', requireAuth, async (req, res) => {
+  try {
+    const { name, description, config, status } = req.body;
+    if (!name || !config) {
+      return res.status(400).json({ error: 'name and config are required' });
+    }
+    if (!config.meta || !Array.isArray(config.items)) {
+      return res.status(400).json({ error: 'config must have meta and items array' });
+    }
+    const result = await db.createSurveyConfig(
+      name, description, config, status, req.user.username
+    );
+    res.json({ success: true, config: result });
+  } catch (error) {
+    console.error('Create survey config API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update survey config
+app.put('/api/survey-configs/:id', requireAuth, async (req, res) => {
+  try {
+    const result = await db.updateSurveyConfig(req.params.id, req.body);
+    if (!result) {
+      return res.status(404).json({ error: 'Survey config not found' });
+    }
+    res.json({ success: true, config: result });
+  } catch (error) {
+    console.error('Update survey config API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete survey config
+app.delete('/api/survey-configs/:id', requireAuth, async (req, res) => {
+  try {
+    await db.deleteSurveyConfig(req.params.id);
+    res.json({ success: true, message: 'Survey config deleted' });
+  } catch (error) {
+    console.error('Delete survey config API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== SURVEY QUEUE ====================
+
+// List all batches with stats
+app.get('/api/survey-queue/batches', requireAuth, async (req, res) => {
+  try {
+    const batches = await db.getSurveyBatches();
+    res.json({ success: true, batches });
+  } catch (error) {
+    console.error('Get survey batches API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single batch
+app.get('/api/survey-queue/batches/:batchId', requireAuth, async (req, res) => {
+  try {
+    const batch = await db.getSurveyBatch(req.params.batchId);
+    if (!batch) {
+      return res.status(404).json({ error: 'Batch not found' });
+    }
+    res.json({ success: true, batch });
+  } catch (error) {
+    console.error('Get survey batch API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Paginated queue items with filters
+app.get('/api/survey-queue/items', requireAuth, async (req, res) => {
+  try {
+    const filters = {
+      batchId: req.query.batchId ? parseInt(req.query.batchId) : null,
+      status: req.query.status || null,
+      state: req.query.state || null,
+      surveyConfigId: req.query.surveyConfigId ? parseInt(req.query.surveyConfigId) : null,
+      page: parseInt(req.query.page) || 1,
+      limit: parseInt(req.query.limit) || 50
+    };
+    const result = await db.getQueueItems(filters);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('Get queue items API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Aggregate stats
+app.get('/api/survey-queue/stats', requireAuth, async (req, res) => {
+  try {
+    const batchId = req.query.batchId ? parseInt(req.query.batchId) : null;
+    const stats = await db.getQueueStats(batchId);
+    res.json({ success: true, stats });
+  } catch (error) {
+    console.error('Get queue stats API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Preview scope count
+app.post('/api/survey-queue/preview', requireAuth, async (req, res) => {
+  try {
+    const { scopeType, scopeFilter } = req.body;
+    if (!scopeType) {
+      return res.status(400).json({ error: 'scopeType is required' });
+    }
+    const count = await db.previewQueueScope(scopeType, scopeFilter || {});
+    res.json({ success: true, count });
+  } catch (error) {
+    console.error('Preview queue scope API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate batch + queue items
+app.post('/api/survey-queue/generate', requireAuth, async (req, res) => {
+  try {
+    const { surveyConfigId, scopeType, scopeFilter } = req.body;
+    if (!surveyConfigId || !scopeType) {
+      return res.status(400).json({ error: 'surveyConfigId and scopeType are required' });
+    }
+
+    const config = await db.getSurveyConfig(surveyConfigId);
+    if (!config) {
+      return res.status(404).json({ error: 'Survey config not found' });
+    }
+    if (config.status !== 'active') {
+      return res.status(400).json({ error: 'Survey config must be active to generate a queue' });
+    }
+
+    const batch = await db.createSurveyBatch(
+      surveyConfigId,
+      scopeType,
+      scopeFilter || {},
+      req.user.username
+    );
+
+    res.json({ success: true, batch });
+  } catch (error) {
+    console.error('Generate queue API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update single queue item status
+app.patch('/api/survey-queue/items/:itemId', requireAuth, async (req, res) => {
+  try {
+    const { status, response_data, error_message } = req.body;
+    if (!status) {
+      return res.status(400).json({ error: 'status is required' });
+    }
+    const validStatuses = ['pending', 'sent', 'completed', 'failed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    const item = await db.updateQueueItemStatus(
+      req.params.itemId,
+      status,
+      { response_data, error_message }
+    );
+    if (!item) {
+      return res.status(404).json({ error: 'Queue item not found' });
+    }
+    res.json({ success: true, item });
+  } catch (error) {
+    console.error('Update queue item API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk action on batch items
+app.post('/api/survey-queue/batches/:batchId/bulk-action', requireAuth, async (req, res) => {
+  try {
+    const { action } = req.body;
+    const batchId = parseInt(req.params.batchId);
+
+    let count;
+    if (action === 'retry-failed') {
+      count = await db.bulkUpdateQueueStatus(batchId, 'failed', 'pending');
+    } else if (action === 'cancel-pending') {
+      count = await db.bulkUpdateQueueStatus(batchId, 'pending', 'cancelled');
+    } else {
+      return res.status(400).json({ error: 'Invalid action. Use "retry-failed" or "cancel-pending"' });
+    }
+
+    res.json({ success: true, action, affectedCount: count });
+  } catch (error) {
+    console.error('Bulk action API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete batch and all its items
+app.delete('/api/survey-queue/batches/:batchId', requireAuth, async (req, res) => {
+  try {
+    await db.deleteSurveyBatch(parseInt(req.params.batchId));
+    res.json({ success: true, message: 'Batch deleted' });
+  } catch (error) {
+    console.error('Delete batch API error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ==================== PUBLIC SURVEY ENDPOINTS (no auth) ====================
+
+// Get survey by unique ID (public)
+app.get('/api/survey/:uniqueId', async (req, res) => {
+  try {
+    const item = await db.getQueueItemByUniqueId(req.params.uniqueId);
+    if (!item) {
+      return res.status(404).json({ error: 'Survey not found' });
+    }
+    if (item.status === 'completed') {
+      return res.json({
+        success: true,
+        completed: true,
+        completedAt: item.completed_at,
+        surveyName: item.survey_name,
+        municipality: item.municipality_name || item.county_name,
+        state: item.state
+      });
+    }
+    if (item.status === 'cancelled') {
+      return res.status(410).json({ error: 'This survey has been cancelled' });
+    }
+
+    // Build template variable replacements
+    const vars = {
+      '{CountyName}': item.county_name || '',
+      '{State}': item.state || '',
+      '{StateName}': item.state || '',
+      '{MunicipalityName}': item.municipality_name || item.county_name || '',
+      '{TreasurerName}': item.primary_contact_name || '',
+      '{TreasurerEmail}': item.primary_contact_email || '',
+      '{TreasurerPhone}': item.primary_contact_phone || '',
+      '{TaxYear}': item.current_tax_year || ''
+    };
+
+    // Deep clone config and substitute variables in string values
+    const config = JSON.parse(JSON.stringify(item.survey_config));
+    function substituteVars(obj) {
+      if (typeof obj === 'string') {
+        let result = obj;
+        for (const [key, val] of Object.entries(vars)) {
+          result = result.split(key).join(val);
+        }
+        return result;
+      }
+      if (Array.isArray(obj)) return obj.map(substituteVars);
+      if (obj && typeof obj === 'object') {
+        const out = {};
+        for (const [k, v] of Object.entries(obj)) {
+          out[k] = substituteVars(v);
+        }
+        return out;
+      }
+      return obj;
+    }
+
+    const processedConfig = substituteVars(config);
+
+    res.json({
+      success: true,
+      completed: false,
+      uniqueId: item.unique_id,
+      surveyName: item.survey_name,
+      municipality: item.municipality_name || item.county_name,
+      state: item.state,
+      county: item.county_name,
+      config: processedConfig
+    });
+  } catch (error) {
+    console.error('Get public survey error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Submit survey response (public)
+app.post('/api/survey/:uniqueId/submit', async (req, res) => {
+  try {
+    const { responses } = req.body;
+    if (!responses || typeof responses !== 'object') {
+      return res.status(400).json({ error: 'responses object is required' });
+    }
+
+    const item = await db.getQueueItemByUniqueId(req.params.uniqueId);
+    if (!item) {
+      return res.status(404).json({ error: 'Survey not found' });
+    }
+    if (item.status === 'completed') {
+      return res.status(409).json({ error: 'This survey has already been completed' });
+    }
+    if (item.status === 'cancelled') {
+      return res.status(410).json({ error: 'This survey has been cancelled' });
+    }
+
+    const updated = await db.submitSurveyResponse(req.params.uniqueId, responses);
+    if (!updated) {
+      return res.status(400).json({ error: 'Unable to submit survey' });
+    }
+
+    res.json({ success: true, message: 'Survey submitted successfully' });
+  } catch (error) {
+    console.error('Submit survey error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

@@ -185,5 +185,64 @@ export default {
 
   getResearchById(researchId) {
     return apiClient.get(`/research/${researchId}`)
+  },
+
+  // Survey Configs
+  getSurveyConfigs() {
+    return apiClient.get('/survey-configs')
+  },
+
+  getSurveyConfig(id) {
+    return apiClient.get(`/survey-configs/${id}`)
+  },
+
+  createSurveyConfig(data) {
+    return apiClient.post('/survey-configs', data)
+  },
+
+  updateSurveyConfig(id, data) {
+    return apiClient.put(`/survey-configs/${id}`, data)
+  },
+
+  deleteSurveyConfig(id) {
+    return apiClient.delete(`/survey-configs/${id}`)
+  },
+
+  // Survey Queue
+  getSurveyBatches() {
+    return apiClient.get('/survey-queue/batches')
+  },
+
+  getSurveyBatch(batchId) {
+    return apiClient.get(`/survey-queue/batches/${batchId}`)
+  },
+
+  getQueueItems(params = {}) {
+    return apiClient.get('/survey-queue/items', { params })
+  },
+
+  getQueueStats(batchId = null) {
+    const params = batchId ? { batchId } : {}
+    return apiClient.get('/survey-queue/stats', { params })
+  },
+
+  previewQueueScope(scopeType, scopeFilter = {}) {
+    return apiClient.post('/survey-queue/preview', { scopeType, scopeFilter })
+  },
+
+  generateQueue(surveyConfigId, scopeType, scopeFilter = {}) {
+    return apiClient.post('/survey-queue/generate', { surveyConfigId, scopeType, scopeFilter })
+  },
+
+  updateQueueItem(itemId, data) {
+    return apiClient.patch(`/survey-queue/items/${itemId}`, data)
+  },
+
+  batchQueueAction(batchId, action) {
+    return apiClient.post(`/survey-queue/batches/${batchId}/bulk-action`, { action })
+  },
+
+  deleteBatch(batchId) {
+    return apiClient.delete(`/survey-queue/batches/${batchId}`)
   }
 }

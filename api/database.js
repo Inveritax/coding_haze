@@ -148,6 +148,32 @@ class PostgresDatabase {
           lr.pay_taxes_url,
           lr.notes,
           lr.validation_score,
+          -- Payment Info fields
+          lr.pmt_preferred_method,
+          lr.pmt_bulk_upload_allowed,
+          lr.pmt_bulk_upload_format,
+          lr.pmt_tax_roll_required,
+          lr.pmt_tax_roll_cost,
+          lr.pmt_third_party_name,
+          lr.pmt_third_party_fee,
+          lr.pmt_third_party_file_format,
+          lr.pmt_original_bill_required,
+          lr.pmt_how_to_obtain_bill,
+          lr.pmt_duplicate_bill_fee_yn,
+          lr.pmt_duplicate_bill_fee,
+          lr.pmt_precommit_required,
+          lr.pmt_precommit_file_format,
+          lr.pmt_method_wire,
+          lr.pmt_method_ach,
+          lr.pmt_method_check,
+          lr.pmt_method_other,
+          lr.pmt_wire_instructions,
+          lr.pmt_ach_instructions,
+          lr.pmt_check_instructions,
+          lr.pmt_other_instructions,
+          lr.pmt_wire_ach_contact_name,
+          lr.pmt_wire_ach_contact_info,
+          lr.pmt_notes,
           CASE WHEN fea.research_id IS NOT NULL THEN true ELSE false END as has_audit_entries,
           fea.edit_count,
           fea.last_edit_date,
@@ -196,7 +222,7 @@ class PostgresDatabase {
         LEFT JOIN LATERAL (
           SELECT * FROM research_results
           WHERE county_id = c.id
-          ORDER BY research_date DESC
+          ORDER BY research_date DESC NULLS LAST
           LIMIT 1
         ) lr ON true
         LEFT JOIN LATERAL (
@@ -474,7 +500,7 @@ class PostgresDatabase {
           (SELECT MAX(created_at) FROM field_edit_audit fea WHERE fea.research_id = rr.id) as last_edit_date
         FROM research_results rr
         WHERE rr.county_id = $1
-        ORDER BY rr.research_date DESC, rr.created_at DESC
+        ORDER BY rr.research_date DESC NULLS LAST, rr.created_at DESC
       `, [countyId]);
 
       return result.rows;
@@ -853,6 +879,518 @@ class PostgresDatabase {
     } catch (error) {
       console.error('Error getting contact types:', error);
       throw error;
+    }
+  }
+
+  // ==================== SURVEY CONFIGS ====================
+
+  async getSurveyConfigs() {
+    try {
+      const result = await this.pool.query(`
+        SELECT id, name, description, status, created_by, created_at, updated_at,
+               config->'meta'->>'title' as config_title,
+               jsonb_array_length(config->'items') as item_count
+        FROM survey_configs
+        ORDER BY updated_at DESC
+      `);
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting survey configs:', error);
+      throw error;
+    }
+  }
+
+  async getSurveyConfig(id) {
+    try {
+      const result = await this.pool.query(
+        'SELECT * FROM survey_configs WHERE id = $1',
+        [id]
+      );
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+      console.error('Error getting survey config:', error);
+      throw error;
+    }
+  }
+
+  async createSurveyConfig(name, description, config, status, createdBy) {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        `INSERT INTO survey_configs (name, description, config, status, created_by)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [name, description || null, JSON.stringify(config), status || 'draft', createdBy]
+      );
+      return result.rows[0];
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateSurveyConfig(id, data) {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        `UPDATE survey_configs SET
+           name = COALESCE($2, name),
+           description = COALESCE($3, description),
+           config = COALESCE($4, config),
+           status = COALESCE($5, status),
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1
+         RETURNING *`,
+        [
+          id,
+          data.name || null,
+          data.description !== undefined ? data.description : null,
+          data.config ? JSON.stringify(data.config) : null,
+          data.status || null
+        ]
+      );
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } finally {
+      client.release();
+    }
+  }
+
+  async deleteSurveyConfig(id) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('DELETE FROM survey_configs WHERE id = $1', [id]);
+    } finally {
+      client.release();
+    }
+  }
+
+  // ==================== SURVEY QUEUE ====================
+
+  async getSurveyBatches() {
+    try {
+      const result = await this.pool.query(`
+        SELECT
+          sb.*,
+          sc.name as survey_name,
+          COUNT(sq.id) as total_items,
+          COUNT(sq.id) FILTER (WHERE sq.status = 'pending') as pending_count,
+          COUNT(sq.id) FILTER (WHERE sq.status = 'sent') as sent_count,
+          COUNT(sq.id) FILTER (WHERE sq.status = 'completed') as completed_count,
+          COUNT(sq.id) FILTER (WHERE sq.status = 'failed') as failed_count,
+          COUNT(sq.id) FILTER (WHERE sq.status = 'cancelled') as cancelled_count
+        FROM survey_batches sb
+        JOIN survey_configs sc ON sc.id = sb.survey_config_id
+        LEFT JOIN survey_queue sq ON sq.batch_id = sb.id
+        GROUP BY sb.id, sc.name
+        ORDER BY sb.created_at DESC
+      `);
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting survey batches:', error);
+      throw error;
+    }
+  }
+
+  async getSurveyBatch(batchId) {
+    try {
+      const result = await this.pool.query(`
+        SELECT
+          sb.*,
+          sc.name as survey_name,
+          sc.config as survey_config
+        FROM survey_batches sb
+        JOIN survey_configs sc ON sc.id = sb.survey_config_id
+        WHERE sb.id = $1
+      `, [batchId]);
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+      console.error('Error getting survey batch:', error);
+      throw error;
+    }
+  }
+
+  async getQueueItems({ batchId, status, state, surveyConfigId, page = 1, limit = 50 } = {}) {
+    const client = await this.pool.connect();
+    try {
+      let whereClauses = [];
+      let params = [];
+      let paramCount = 0;
+
+      if (batchId) {
+        paramCount++;
+        whereClauses.push(`sq.batch_id = $${paramCount}`);
+        params.push(batchId);
+      }
+      if (status) {
+        paramCount++;
+        whereClauses.push(`sq.status = $${paramCount}`);
+        params.push(status);
+      }
+      if (state) {
+        paramCount++;
+        whereClauses.push(`c.state = $${paramCount}`);
+        params.push(state);
+      }
+      if (surveyConfigId) {
+        paramCount++;
+        whereClauses.push(`sq.survey_config_id = $${paramCount}`);
+        params.push(surveyConfigId);
+      }
+
+      const whereStr = whereClauses.length > 0
+        ? 'WHERE ' + whereClauses.join(' AND ')
+        : '';
+
+      const countResult = await client.query(
+        `SELECT COUNT(*) as total
+         FROM survey_queue sq
+         JOIN counties c ON c.id = sq.county_id
+         ${whereStr}`,
+        params
+      );
+      const total = parseInt(countResult.rows[0].total);
+
+      const offsetVal = (page - 1) * limit;
+      paramCount++;
+      params.push(limit);
+      paramCount++;
+      params.push(offsetVal);
+
+      const dataResult = await client.query(
+        `SELECT
+           sq.*,
+           c.state,
+           c.county_name,
+           c.municipality_name,
+           sc.name as survey_name
+         FROM survey_queue sq
+         JOIN counties c ON c.id = sq.county_id
+         JOIN survey_configs sc ON sc.id = sq.survey_config_id
+         ${whereStr}
+         ORDER BY c.state, COALESCE(c.municipality_name, c.county_name)
+         LIMIT $${paramCount - 1} OFFSET $${paramCount}`,
+        params
+      );
+
+      return {
+        items: dataResult.rows,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      };
+    } finally {
+      client.release();
+    }
+  }
+
+  async getQueueStats(batchId = null) {
+    try {
+      let whereClause = '';
+      let params = [];
+      if (batchId) {
+        whereClause = 'WHERE batch_id = $1';
+        params = [batchId];
+      }
+      const result = await this.pool.query(`
+        SELECT
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'pending') as pending,
+          COUNT(*) FILTER (WHERE status = 'sent') as sent,
+          COUNT(*) FILTER (WHERE status = 'completed') as completed,
+          COUNT(*) FILTER (WHERE status = 'failed') as failed,
+          COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled
+        FROM survey_queue
+        ${whereClause}
+      `, params);
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error getting queue stats:', error);
+      throw error;
+    }
+  }
+
+  // Build WHERE clause for queue scope filtering
+  _buildScopeWhere(scopeType, scopeFilter, startParamCount = 0) {
+    let whereClause = 'WHERE 1=1';
+    let params = [];
+    let paramCount = startParamCount;
+
+    // Jurisdiction type filter
+    const jt = scopeFilter.jurisdictionType || 'municipalities_only';
+    if (jt === 'county_only') {
+      whereClause += ' AND c.municipality_name IS NULL';
+    } else if (jt === 'all') {
+      // no municipality filter — include everything
+    } else {
+      // default: municipalities_only
+      whereClause += ' AND c.municipality_name IS NOT NULL';
+    }
+
+    // State filter
+    if (scopeFilter.states && scopeFilter.states.length > 0) {
+      paramCount++;
+      whereClause += ` AND c.state = ANY($${paramCount})`;
+      params.push(scopeFilter.states);
+    }
+
+    // County name filter
+    if (scopeFilter.county_names && scopeFilter.county_names.length > 0) {
+      paramCount++;
+      whereClause += ` AND c.county_name = ANY($${paramCount})`;
+      params.push(scopeFilter.county_names);
+    }
+
+    // Custom county ID filter
+    if (scopeType === 'custom' && scopeFilter.county_ids && scopeFilter.county_ids.length > 0) {
+      paramCount++;
+      whereClause += ` AND c.id = ANY($${paramCount})`;
+      params.push(scopeFilter.county_ids);
+    }
+
+    return { whereClause, params, paramCount };
+  }
+
+  async previewQueueScope(scopeType, scopeFilter = {}) {
+    try {
+      const { whereClause, params } = this._buildScopeWhere(scopeType, scopeFilter);
+
+      const result = await this.pool.query(`
+        SELECT COUNT(*) as count
+        FROM counties c
+        ${whereClause}
+      `, params);
+      return parseInt(result.rows[0].count);
+    } catch (error) {
+      console.error('Error previewing queue scope:', error);
+      throw error;
+    }
+  }
+
+  async createSurveyBatch(surveyConfigId, scopeType, scopeFilter, createdBy) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const batchResult = await client.query(
+        `INSERT INTO survey_batches (survey_config_id, name, scope_type, scope_filter, created_by)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [
+          surveyConfigId,
+          scopeFilter.name || `Batch ${new Date().toISOString().slice(0, 10)}`,
+          scopeType,
+          JSON.stringify(scopeFilter),
+          createdBy
+        ]
+      );
+      const batch = batchResult.rows[0];
+
+      const { whereClause, params: scopeParams } = this._buildScopeWhere(scopeType, scopeFilter, 2);
+      const params = [batch.id, surveyConfigId, ...scopeParams];
+
+      const insertResult = await client.query(
+        `INSERT INTO survey_queue (batch_id, county_id, survey_config_id)
+         SELECT $1, c.id, $2
+         FROM counties c
+         ${whereClause}
+         ORDER BY c.state, c.municipality_name`,
+        params
+      );
+
+      await client.query(
+        `UPDATE survey_batches SET total_items = $2 WHERE id = $1`,
+        [batch.id, insertResult.rowCount]
+      );
+
+      await client.query('COMMIT');
+
+      return { ...batch, total_items: insertResult.rowCount };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error creating survey batch:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateQueueItemStatus(queueItemId, status, extraData = {}) {
+    const client = await this.pool.connect();
+    try {
+      const setClauses = ['status = $2', 'updated_at = CURRENT_TIMESTAMP'];
+      const params = [queueItemId, status];
+      let paramCount = 2;
+
+      if (status === 'sent') {
+        setClauses.push('sent_at = CURRENT_TIMESTAMP');
+      }
+      if (status === 'completed') {
+        setClauses.push('completed_at = CURRENT_TIMESTAMP');
+        if (extraData.response_data) {
+          paramCount++;
+          setClauses.push(`response_data = $${paramCount}`);
+          params.push(JSON.stringify(extraData.response_data));
+        }
+      }
+      if (status === 'failed' && extraData.error_message) {
+        paramCount++;
+        setClauses.push(`error_message = $${paramCount}`);
+        params.push(extraData.error_message);
+      }
+
+      const result = await client.query(
+        `UPDATE survey_queue SET ${setClauses.join(', ')} WHERE id = $1 RETURNING *`,
+        params
+      );
+      return result.rows[0] || null;
+    } finally {
+      client.release();
+    }
+  }
+
+  async bulkUpdateQueueStatus(batchId, fromStatus, toStatus) {
+    try {
+      const result = await this.pool.query(
+        `UPDATE survey_queue
+         SET status = $3, updated_at = CURRENT_TIMESTAMP
+         WHERE batch_id = $1 AND status = $2
+         RETURNING id`,
+        [batchId, fromStatus, toStatus]
+      );
+      return result.rowCount;
+    } catch (error) {
+      console.error('Error bulk updating queue status:', error);
+      throw error;
+    }
+  }
+
+  // ==================== PUBLIC SURVEY ====================
+
+  async getQueueItemByUniqueId(uniqueId) {
+    try {
+      const result = await this.pool.query(`
+        SELECT
+          sq.id,
+          sq.unique_id,
+          sq.status,
+          sq.response_data,
+          sq.completed_at,
+          sc.name as survey_name,
+          sc.config as survey_config,
+          c.state,
+          c.county_name,
+          c.municipality_name,
+          rr.current_tax_year,
+          rr.primary_contact_name,
+          rr.primary_contact_email,
+          rr.primary_contact_phone
+        FROM survey_queue sq
+        JOIN survey_configs sc ON sc.id = sq.survey_config_id
+        JOIN counties c ON c.id = sq.county_id
+        LEFT JOIN LATERAL (
+          SELECT current_tax_year, primary_contact_name, primary_contact_email, primary_contact_phone
+          FROM research_results
+          WHERE county_id = c.id
+          ORDER BY research_date DESC NULLS LAST
+          LIMIT 1
+        ) rr ON true
+        WHERE sq.unique_id = $1
+      `, [uniqueId]);
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+      console.error('Error getting queue item by unique ID:', error);
+      throw error;
+    }
+  }
+
+  async submitSurveyResponse(uniqueId, responseData) {
+    // Valid research_results columns that survey responses can write to
+    const VALID_COLUMNS = [
+      'tax_year', 'current_tax_year', 'num_installments',
+      'tax_year_rollover_date', 'delq_search_start_date',
+      'default_delq_collector', 'default_escrow_collector',
+      'default_escrow_search_start_date', 'tax_billing_date',
+      'due_date_1', 'due_date_2', 'due_date_3', 'due_date_4', 'due_date_5',
+      'due_date_6', 'due_date_7', 'due_date_8', 'due_date_9', 'due_date_10',
+      'primary_contact_name', 'primary_contact_title',
+      'primary_contact_phone', 'primary_contact_email',
+      'tax_authority_physical_address', 'tax_authority_mailing_address',
+      'general_phone_number', 'fax_number',
+      'web_address', 'county_website', 'pay_taxes_url', 'notes',
+      'tax_key_format_masked', 'tax_key_format_unmasked',
+      'alt_tax_key_format_masked', 'alt_tax_key_format_unmasked',
+      'search_by_installments', 'tax_dates_notes',
+      'full_year_due_date', 'full_year_precommitment_date',
+      'full_year_finalize_balance_date', 'full_year_make_payment_due_date',
+      // Payment Info fields (excluding instructions — not surveyable)
+      'pmt_preferred_method', 'pmt_bulk_upload_allowed', 'pmt_bulk_upload_format',
+      'pmt_tax_roll_required', 'pmt_tax_roll_cost',
+      'pmt_third_party_name', 'pmt_third_party_fee', 'pmt_third_party_file_format',
+      'pmt_original_bill_required', 'pmt_how_to_obtain_bill',
+      'pmt_duplicate_bill_fee_yn', 'pmt_duplicate_bill_fee',
+      'pmt_precommit_required', 'pmt_precommit_file_format',
+      'pmt_method_wire', 'pmt_method_ach', 'pmt_method_check', 'pmt_method_other',
+      'pmt_wire_ach_contact_name', 'pmt_wire_ach_contact_info', 'pmt_notes'
+    ];
+
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Mark the queue item as completed
+      const result = await client.query(
+        `UPDATE survey_queue
+         SET status = 'completed',
+             response_data = $2,
+             completed_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE unique_id = $1 AND status IN ('pending', 'sent')
+         RETURNING *`,
+        [uniqueId, JSON.stringify(responseData)]
+      );
+      const queueItem = result.rows[0];
+      if (!queueItem) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      // 2. Write matching fields to research_results as a new (inactive) version
+      //    research_date = NULL so it won't be selected as the active version
+      const columns = ['county_id', 'method_used', 'success'];
+      const values = [queueItem.county_id, 'survey_response', true];
+      let paramCount = 3;
+
+      for (const [key, value] of Object.entries(responseData)) {
+        if (VALID_COLUMNS.includes(key) && value !== '' && value !== null && value !== undefined) {
+          paramCount++;
+          columns.push(key);
+          values.push(value);
+        }
+      }
+
+      await client.query(
+        `INSERT INTO research_results (${columns.join(', ')})
+         VALUES (${columns.map((_, i) => `$${i + 1}`).join(', ')})`,
+        values
+      );
+
+      await client.query('COMMIT');
+      return queueItem;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error submitting survey response:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async deleteSurveyBatch(batchId) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('DELETE FROM survey_batches WHERE id = $1', [batchId]);
+    } finally {
+      client.release();
     }
   }
 

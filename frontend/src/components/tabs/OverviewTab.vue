@@ -111,7 +111,7 @@ function openUrl(url) {
           <p class="text-gray-500 mt-1">
             {{ county.state }} · {{ jurisdictionLabel }}
             <span v-if="county.jurisdiction_type === 'municipality'" class="text-gray-400">
-              · {{ county.county_name }} County
+              · {{ county.county_name.endsWith(' County') ? county.county_name : county.county_name + ' County' }}
             </span>
           </p>
         </div>
