@@ -159,6 +159,18 @@ async function handleSave() {
   }
 }
 
+// Collector dropdown options (county name + municipality name if applicable)
+const collectorOptions = computed(() => {
+  const options = []
+  if (props.county?.county_name) {
+    options.push(props.county.county_name)
+  }
+  if (props.county?.municipality_name) {
+    options.push(props.county.municipality_name)
+  }
+  return options
+})
+
 // Format date for display
 function formatDate(date) {
   if (!date) return ''
@@ -315,24 +327,26 @@ function formatDate(date) {
 
                   <div>
                     <label class="input-label">Delq Collector</label>
-                    <input
+                    <select
                       :value="inst.delq_collector"
-                      @input="updateInstallmentField(inst, 'delq_collector', $event.target.value)"
-                      type="text"
-                      placeholder="e.g., County Treasurer"
+                      @change="updateInstallmentField(inst, 'delq_collector', $event.target.value)"
                       class="input"
-                    />
+                    >
+                      <option value="">Select collector...</option>
+                      <option v-for="opt in collectorOptions" :key="opt" :value="opt">{{ opt }}</option>
+                    </select>
                   </div>
 
                   <div>
                     <label class="input-label">Escrow Collector</label>
-                    <input
+                    <select
                       :value="inst.escrow_collector"
-                      @input="updateInstallmentField(inst, 'escrow_collector', $event.target.value)"
-                      type="text"
-                      placeholder="e.g., County Treasurer"
+                      @change="updateInstallmentField(inst, 'escrow_collector', $event.target.value)"
                       class="input"
-                    />
+                    >
+                      <option value="">Select collector...</option>
+                      <option v-for="opt in collectorOptions" :key="opt" :value="opt">{{ opt }}</option>
+                    </select>
                   </div>
 
                   <div>
