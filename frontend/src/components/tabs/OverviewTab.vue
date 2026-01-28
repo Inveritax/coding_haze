@@ -301,7 +301,7 @@ function openUrl(url) {
                 <Globe class="w-5 h-5 text-blue-600" />
               </div>
               <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-gray-900">Main Website</p>
+                <p class="text-sm font-medium text-gray-900">Scraper Website URL</p>
                 <p class="text-xs text-gray-500 truncate">{{ pc.tax_search_website }}</p>
               </div>
               <ExternalLink class="w-4 h-4 text-gray-400" />
