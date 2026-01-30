@@ -83,10 +83,20 @@ class PostgresDatabase {
 
       if (search) {
         paramCount++;
-        const searchPattern = `%${search.toLowerCase()}%`;
+
+        // Check for strict county match mode (search ending with *)
+        // This matches only where county_name contains the term (for counties)
+        // or parent_county_name contains the term (for municipalities)
+        const isStrictCountyMatch = search.endsWith('*');
+        const searchTerm = isStrictCountyMatch ? search.slice(0, -1) : search;
+        const searchPattern = `%${searchTerm.toLowerCase()}%`;
 
         let searchCondition;
-        if (searchMode === 'name') {
+        if (isStrictCountyMatch) {
+          // Strict county match: only match county_name for both counties and municipalities
+          // For municipalities, this matches on their parent county name (which is county_name)
+          searchCondition = `LOWER(c.county_name) LIKE $${paramCount}`;
+        } else if (searchMode === 'name') {
           searchCondition = `(
             LOWER(c.municipality_name) LIKE $${paramCount} OR
             LOWER(c.county_name) LIKE $${paramCount}

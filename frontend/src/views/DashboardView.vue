@@ -64,12 +64,43 @@ const isLoading = ref(false)
 const isSidebarCollapsed = ref(false)
 const isSaving = ref(false)
 
-// Filters
-const selectedState = ref('')
-const showCounties = ref(true)
-const showMunicipalities = ref(true)
-const hideEdited = ref(false)
+// Filters - load from localStorage if available
+const FILTERS_STORAGE_KEY = 'taxscraper_filters'
+
+function loadSavedFilters() {
+  try {
+    const saved = localStorage.getItem(FILTERS_STORAGE_KEY)
+    if (saved) {
+      return JSON.parse(saved)
+    }
+  } catch (e) {
+    console.warn('Failed to load saved filters:', e)
+  }
+  return null
+}
+
+const savedFilters = loadSavedFilters()
+const selectedState = ref(savedFilters?.selectedState ?? '')
+const showCounties = ref(savedFilters?.showCounties ?? true)
+const showMunicipalities = ref(savedFilters?.showMunicipalities ?? true)
+const hideEdited = ref(savedFilters?.hideEdited ?? false)
 const showFilters = ref(false)
+
+// Save filters to localStorage when they change
+function saveFilters() {
+  try {
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({
+      selectedState: selectedState.value,
+      showCounties: showCounties.value,
+      showMunicipalities: showMunicipalities.value,
+      hideEdited: hideEdited.value
+    }))
+  } catch (e) {
+    console.warn('Failed to save filters:', e)
+  }
+}
+
+watch([selectedState, showCounties, showMunicipalities, hideEdited], saveFilters)
 
 // US States list
 const usStates = [
@@ -269,14 +300,16 @@ function openHistory(county, event) {
 }
 
 // Filter by parent county (when clicking X/X badge)
-// Sets state filter, search box to county name, and ensures both checkboxes are checked
+// Sets state filter, search box to county name with * suffix for strict county match
 function filterByCounty(county, event) {
   event.stopPropagation()
   // Set state filter
   selectedState.value = county.state
-  // Set search to county name (without " County" suffix for better matching)
+  // Set search to county name with * suffix for strict county matching
+  // This ensures only results where county_name matches are shown
+  // (won't show municipalities named "Emmet" in other counties)
   const countyNameForSearch = county.county_name.replace(/ County$/, '')
-  searchQuery.value = countyNameForSearch
+  searchQuery.value = countyNameForSearch + '*'
   // Ensure both counties and municipalities are shown
   showCounties.value = true
   showMunicipalities.value = true

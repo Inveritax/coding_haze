@@ -171,6 +171,31 @@ const collectorOptions = computed(() => {
   return options
 })
 
+// Check if a collector value is a custom "Other" value
+function isOtherCollector(value) {
+  if (!value) return false
+  return !collectorOptions.value.includes(value)
+}
+
+// Get the select value for a collector (returns '__other__' if custom)
+function getCollectorSelectValue(value) {
+  if (!value) return ''
+  if (collectorOptions.value.includes(value)) return value
+  return '__other__'
+}
+
+// Handle collector select change
+function handleCollectorChange(inst, field, selectValue) {
+  if (selectValue === '__other__') {
+    // Keep existing custom value or clear it
+    if (!isOtherCollector(inst[field])) {
+      updateInstallmentField(inst, field, '')
+    }
+  } else {
+    updateInstallmentField(inst, field, selectValue)
+  }
+}
+
 // Format date for display
 function formatDate(date) {
   if (!date) return ''
@@ -328,25 +353,43 @@ function formatDate(date) {
                   <div>
                     <label class="input-label">Delq Collector</label>
                     <select
-                      :value="inst.delq_collector"
-                      @change="updateInstallmentField(inst, 'delq_collector', $event.target.value)"
+                      :value="getCollectorSelectValue(inst.delq_collector)"
+                      @change="handleCollectorChange(inst, 'delq_collector', $event.target.value)"
                       class="input"
                     >
                       <option value="">Select collector...</option>
                       <option v-for="opt in collectorOptions" :key="opt" :value="opt">{{ opt }}</option>
+                      <option value="__other__">Other...</option>
                     </select>
+                    <input
+                      v-if="isOtherCollector(inst.delq_collector) || getCollectorSelectValue(inst.delq_collector) === '__other__'"
+                      :value="inst.delq_collector"
+                      @input="updateInstallmentField(inst, 'delq_collector', $event.target.value)"
+                      type="text"
+                      placeholder="Enter custom collector..."
+                      class="input mt-2"
+                    />
                   </div>
 
                   <div>
                     <label class="input-label">Escrow Collector</label>
                     <select
-                      :value="inst.escrow_collector"
-                      @change="updateInstallmentField(inst, 'escrow_collector', $event.target.value)"
+                      :value="getCollectorSelectValue(inst.escrow_collector)"
+                      @change="handleCollectorChange(inst, 'escrow_collector', $event.target.value)"
                       class="input"
                     >
                       <option value="">Select collector...</option>
                       <option v-for="opt in collectorOptions" :key="opt" :value="opt">{{ opt }}</option>
+                      <option value="__other__">Other...</option>
                     </select>
+                    <input
+                      v-if="isOtherCollector(inst.escrow_collector) || getCollectorSelectValue(inst.escrow_collector) === '__other__'"
+                      :value="inst.escrow_collector"
+                      @input="updateInstallmentField(inst, 'escrow_collector', $event.target.value)"
+                      type="text"
+                      placeholder="Enter custom collector..."
+                      class="input mt-2"
+                    />
                   </div>
 
                   <div>
