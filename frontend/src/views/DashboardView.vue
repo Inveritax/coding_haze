@@ -59,7 +59,6 @@ const authStore = useAuthStore()
 const counties = ref([])
 const selectedCounty = ref(null)
 const activeTab = ref('overview')
-const searchQuery = ref('')
 const isLoading = ref(false)
 const isSidebarCollapsed = ref(false)
 const isSaving = ref(false)
@@ -80,6 +79,7 @@ function loadSavedFilters() {
 }
 
 const savedFilters = loadSavedFilters()
+const searchQuery = ref(savedFilters?.searchQuery ?? '')
 const selectedState = ref(savedFilters?.selectedState ?? '')
 const showCounties = ref(savedFilters?.showCounties ?? true)
 const showMunicipalities = ref(savedFilters?.showMunicipalities ?? true)
@@ -90,6 +90,7 @@ const showFilters = ref(false)
 function saveFilters() {
   try {
     localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify({
+      searchQuery: searchQuery.value,
       selectedState: selectedState.value,
       showCounties: showCounties.value,
       showMunicipalities: showMunicipalities.value,
@@ -100,7 +101,7 @@ function saveFilters() {
   }
 }
 
-watch([selectedState, showCounties, showMunicipalities, hideEdited], saveFilters)
+watch([searchQuery, selectedState, showCounties, showMunicipalities, hideEdited], saveFilters)
 
 // US States list
 const usStates = [
