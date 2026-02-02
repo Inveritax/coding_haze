@@ -171,14 +171,24 @@ const collectorOptions = computed(() => {
   return options
 })
 
-// Check if a collector value is a custom "Other" value
+// Track which installment fields are in "other" mode
+const otherModeFields = ref({})
+
+// Check if a collector value is a custom "Other" value (not empty and not in options)
 function isOtherCollector(value) {
   if (!value) return false
   return !collectorOptions.value.includes(value)
 }
 
-// Get the select value for a collector (returns '__other__' if custom)
-function getCollectorSelectValue(value) {
+// Check if field is in "other" mode (either has custom value or user selected Other)
+function isInOtherMode(instId, field) {
+  const key = `${instId}_${field}`
+  return otherModeFields.value[key] || false
+}
+
+// Get the select value for a collector (returns '__other__' if custom or in other mode)
+function getCollectorSelectValue(instId, field, value) {
+  if (isInOtherMode(instId, field)) return '__other__'
   if (!value) return ''
   if (collectorOptions.value.includes(value)) return value
   return '__other__'
@@ -186,14 +196,24 @@ function getCollectorSelectValue(value) {
 
 // Handle collector select change
 function handleCollectorChange(inst, field, selectValue) {
+  const key = `${inst.id}_${field}`
   if (selectValue === '__other__') {
-    // Keep existing custom value or clear it
+    // Enter "other" mode - show the text input
+    otherModeFields.value[key] = true
+    // Clear value if it was a standard option
     if (!isOtherCollector(inst[field])) {
       updateInstallmentField(inst, field, '')
     }
   } else {
+    // Exit "other" mode
+    otherModeFields.value[key] = false
     updateInstallmentField(inst, field, selectValue)
   }
+}
+
+// Check if text input should show for a collector field
+function showOtherInput(instId, field, value) {
+  return isInOtherMode(instId, field) || isOtherCollector(value)
 }
 
 // Format date for display
@@ -353,7 +373,7 @@ function formatDate(date) {
                   <div>
                     <label class="input-label">Delq Collector</label>
                     <select
-                      :value="getCollectorSelectValue(inst.delq_collector)"
+                      :value="getCollectorSelectValue(inst.id, 'delq_collector', inst.delq_collector)"
                       @change="handleCollectorChange(inst, 'delq_collector', $event.target.value)"
                       class="input"
                     >
@@ -362,7 +382,7 @@ function formatDate(date) {
                       <option value="__other__">Other...</option>
                     </select>
                     <input
-                      v-if="isOtherCollector(inst.delq_collector) || getCollectorSelectValue(inst.delq_collector) === '__other__'"
+                      v-if="showOtherInput(inst.id, 'delq_collector', inst.delq_collector)"
                       :value="inst.delq_collector"
                       @input="updateInstallmentField(inst, 'delq_collector', $event.target.value)"
                       type="text"
@@ -374,7 +394,7 @@ function formatDate(date) {
                   <div>
                     <label class="input-label">Escrow Collector</label>
                     <select
-                      :value="getCollectorSelectValue(inst.escrow_collector)"
+                      :value="getCollectorSelectValue(inst.id, 'escrow_collector', inst.escrow_collector)"
                       @change="handleCollectorChange(inst, 'escrow_collector', $event.target.value)"
                       class="input"
                     >
@@ -383,7 +403,7 @@ function formatDate(date) {
                       <option value="__other__">Other...</option>
                     </select>
                     <input
-                      v-if="isOtherCollector(inst.escrow_collector) || getCollectorSelectValue(inst.escrow_collector) === '__other__'"
+                      v-if="showOtherInput(inst.id, 'escrow_collector', inst.escrow_collector)"
                       :value="inst.escrow_collector"
                       @input="updateInstallmentField(inst, 'escrow_collector', $event.target.value)"
                       type="text"
