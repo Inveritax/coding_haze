@@ -60,7 +60,7 @@ const pc = computed(() => primaryContact.value)
 const hasTaxInfo = computed(() => props.county.current_tax_year || props.county.num_installments)
 const hasContact = computed(() => pc.value?.name || pc.value?.phone || pc.value?.email)
 const hasAddresses = computed(() => pc.value?.physical_address || pc.value?.mailing_address)
-const hasOnline = computed(() => pc.value?.tax_search_website || pc.value?.website || props.county.pay_taxes_url)
+const hasOnline = computed(() => pc.value?.tax_search_website || pc.value?.website)
 const hasAdditional = computed(() => pc.value?.general_phone || pc.value?.fax || props.county.notes)
 
 // Format date for display
@@ -96,8 +96,7 @@ const completionItems = computed(() => {
     { label: 'Phone', complete: !!pc.value?.phone || !!pc.value?.general_phone, tab: 'additional' },
     { label: 'Email', complete: !!pc.value?.email, tab: 'contact' },
     { label: 'Address', complete: !!pc.value?.physical_address, tab: 'address' },
-    { label: 'Website', complete: !!pc.value?.tax_search_website || !!pc.value?.website, tab: 'online' },
-    { label: 'Payment URL', complete: !!props.county.pay_taxes_url, tab: 'online' }
+    { label: 'Website', complete: !!pc.value?.tax_search_website || !!pc.value?.website, tab: 'online' }
   ]
 })
 
@@ -318,21 +317,6 @@ function openUrl(url) {
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-medium text-gray-900">Agency Website</p>
                 <p class="text-xs text-gray-500 truncate">{{ pc.website }}</p>
-              </div>
-              <ExternalLink class="w-4 h-4 text-gray-400" />
-            </button>
-
-            <button
-              v-if="county.pay_taxes_url"
-              @click="openUrl(county.pay_taxes_url)"
-              class="flex items-center gap-3 w-full p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-left"
-            >
-              <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <CreditCard class="w-5 h-5 text-green-600" />
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-gray-900">Pay Taxes Online</p>
-                <p class="text-xs text-gray-500 truncate">{{ county.pay_taxes_url }}</p>
               </div>
               <ExternalLink class="w-4 h-4 text-gray-400" />
             </button>

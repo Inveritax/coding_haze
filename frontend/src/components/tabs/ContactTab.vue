@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch } from 'vue'
-import { User, Briefcase, Phone, Mail, Save, AlertCircle } from 'lucide-vue-next'
+import { User, Briefcase, Phone, Mail, Globe, Save, AlertCircle } from 'lucide-vue-next'
 
 const props = defineProps({
   county: {
@@ -16,7 +16,8 @@ const form = ref({
   primary_contact_name: '',
   primary_contact_title: '',
   primary_contact_phone: '',
-  primary_contact_email: ''
+  primary_contact_email: '',
+  scraper_page_url: ''
 })
 
 const hasChanges = ref(false)
@@ -30,7 +31,8 @@ watch(() => props.county, (newCounty) => {
       primary_contact_name: newCounty.primary_contact_name || '',
       primary_contact_title: newCounty.primary_contact_title || '',
       primary_contact_phone: newCounty.primary_contact_phone || '',
-      primary_contact_email: newCounty.primary_contact_email || ''
+      primary_contact_email: newCounty.primary_contact_email || '',
+      scraper_page_url: newCounty.scraper_page_url || ''
     }
     hasChanges.value = false
   }
@@ -141,6 +143,20 @@ function handlePhoneInput(e) {
               class="input"
             />
           </div>
+        </div>
+
+        <!-- Scraper Page URL -->
+        <div>
+          <label class="input-label">
+            <Globe class="w-4 h-4 inline mr-1.5" />
+            Scraper Page URL
+          </label>
+          <input
+            v-model="form.scraper_page_url"
+            type="url"
+            placeholder="https://example.com/scraper-page"
+            class="input"
+          />
         </div>
 
         <!-- Contact Card Preview -->

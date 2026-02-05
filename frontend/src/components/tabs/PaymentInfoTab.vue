@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
-import { Save, AlertCircle, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { Save, AlertCircle, ChevronDown, ChevronUp, Globe, Phone, Mail } from 'lucide-vue-next'
 
 const props = defineProps({
   county: {
@@ -18,6 +18,9 @@ const thirdPartyOptions = ['AutoAgent', 'GovTech', 'Tax & Tags']
 // Local form state
 const form = ref({
   pmt_preferred_method: '',
+  pmt_amounts_url: '',
+  pmt_amounts_phone: '',
+  pmt_amounts_email: '',
   pmt_bulk_upload_allowed: null,
   pmt_bulk_upload_format: '',
   pmt_tax_roll_required: null,
@@ -95,6 +98,9 @@ watch(() => props.county, (newCounty) => {
   if (newCounty) {
     form.value = {
       pmt_preferred_method: newCounty.pmt_preferred_method || '',
+      pmt_amounts_url: newCounty.pmt_amounts_url || '',
+      pmt_amounts_phone: newCounty.pmt_amounts_phone || '',
+      pmt_amounts_email: newCounty.pmt_amounts_email || '',
       pmt_bulk_upload_allowed: newCounty.pmt_bulk_upload_allowed ?? null,
       pmt_bulk_upload_format: newCounty.pmt_bulk_upload_format || '',
       pmt_tax_roll_required: newCounty.pmt_tax_roll_required ?? null,
@@ -229,6 +235,48 @@ async function handleSave() {
                 type="text"
                 placeholder="Enter custom method..."
                 class="input flex-1"
+              />
+            </div>
+          </div>
+
+          <!-- Contact Information for Providing Amounts -->
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="input-label">
+                <Globe class="w-4 h-4 inline mr-1.5" />
+                URL
+              </label>
+              <input
+                v-model="form.pmt_amounts_url"
+                type="url"
+                placeholder="https://example.com"
+                class="input"
+              />
+            </div>
+
+            <div>
+              <label class="input-label">
+                <Phone class="w-4 h-4 inline mr-1.5" />
+                Phone
+              </label>
+              <input
+                v-model="form.pmt_amounts_phone"
+                type="tel"
+                placeholder="(555) 555-5555"
+                class="input"
+              />
+            </div>
+
+            <div>
+              <label class="input-label">
+                <Mail class="w-4 h-4 inline mr-1.5" />
+                Email
+              </label>
+              <input
+                v-model="form.pmt_amounts_email"
+                type="email"
+                placeholder="email@example.com"
+                class="input"
               />
             </div>
           </div>
