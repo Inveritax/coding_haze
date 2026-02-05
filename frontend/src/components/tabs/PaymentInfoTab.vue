@@ -18,9 +18,7 @@ const thirdPartyOptions = ['AutoAgent', 'GovTech', 'Tax & Tags']
 // Local form state
 const form = ref({
   pmt_preferred_method: '',
-  pmt_amounts_url: '',
-  pmt_amounts_phone: '',
-  pmt_amounts_email: '',
+  pmt_amounts_contact_info: '',
   pmt_bulk_upload_allowed: null,
   pmt_bulk_upload_format: '',
   pmt_tax_roll_required: null,
@@ -98,9 +96,7 @@ watch(() => props.county, (newCounty) => {
   if (newCounty) {
     form.value = {
       pmt_preferred_method: newCounty.pmt_preferred_method || '',
-      pmt_amounts_url: newCounty.pmt_amounts_url || '',
-      pmt_amounts_phone: newCounty.pmt_amounts_phone || '',
-      pmt_amounts_email: newCounty.pmt_amounts_email || '',
+      pmt_amounts_contact_info: newCounty.pmt_amounts_contact_info || '',
       pmt_bulk_upload_allowed: newCounty.pmt_bulk_upload_allowed ?? null,
       pmt_bulk_upload_format: newCounty.pmt_bulk_upload_format || '',
       pmt_tax_roll_required: newCounty.pmt_tax_roll_required ?? null,
@@ -163,6 +159,23 @@ function onThirdPartyChange(val) {
 const preferredMethodSelect = computed(() => {
   if (useCustomPreferred.value) return '__custom__'
   return form.value.pmt_preferred_method
+})
+
+// Computed label and placeholder for contact info field
+const contactInfoLabel = computed(() => {
+  const method = form.value.pmt_preferred_method
+  if (method === 'Online') return 'URL'
+  if (method === 'Phone') return 'Phone #'
+  if (method === 'Email') return 'Email'
+  return 'Contact Info'
+})
+
+const contactInfoPlaceholder = computed(() => {
+  const method = form.value.pmt_preferred_method
+  if (method === 'Online') return 'https://example.com or instructions'
+  if (method === 'Phone') return '(555) 555-5555 or instructions'
+  if (method === 'Email') return 'email@example.com or instructions'
+  return 'Enter contact information or instructions'
 })
 
 const thirdPartySelect = computed(() => {
@@ -240,45 +253,20 @@ async function handleSave() {
           </div>
 
           <!-- Contact Information for Providing Amounts -->
-          <div class="grid grid-cols-3 gap-4">
-            <div>
-              <label class="input-label">
-                <Globe class="w-4 h-4 inline mr-1.5" />
-                URL
-              </label>
-              <input
-                v-model="form.pmt_amounts_url"
-                type="url"
-                placeholder="https://example.com"
-                class="input"
+          <div v-if="form.pmt_preferred_method">
+            <label class="input-label">
+              <component
+                :is="form.pmt_preferred_method === 'Online' ? Globe : form.pmt_preferred_method === 'Phone' ? Phone : Mail"
+                class="w-4 h-4 inline mr-1.5"
               />
-            </div>
-
-            <div>
-              <label class="input-label">
-                <Phone class="w-4 h-4 inline mr-1.5" />
-                Phone
-              </label>
-              <input
-                v-model="form.pmt_amounts_phone"
-                type="tel"
-                placeholder="(555) 555-5555"
-                class="input"
-              />
-            </div>
-
-            <div>
-              <label class="input-label">
-                <Mail class="w-4 h-4 inline mr-1.5" />
-                Email
-              </label>
-              <input
-                v-model="form.pmt_amounts_email"
-                type="email"
-                placeholder="email@example.com"
-                class="input"
-              />
-            </div>
+              {{ contactInfoLabel }}
+            </label>
+            <textarea
+              v-model="form.pmt_amounts_contact_info"
+              rows="2"
+              :placeholder="contactInfoPlaceholder"
+              class="input"
+            ></textarea>
           </div>
         </div>
       </div>
