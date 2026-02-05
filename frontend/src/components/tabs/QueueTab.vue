@@ -258,6 +258,7 @@ function statusBadgeClass(status) {
   switch (status) {
     case 'pending': return 'bg-amber-100 text-amber-700'
     case 'sent': return 'bg-blue-100 text-blue-700'
+    case 'in_progress': return 'bg-purple-100 text-purple-700'
     case 'completed': return 'bg-green-100 text-green-700'
     case 'failed': return 'bg-red-100 text-red-700'
     case 'cancelled': return 'bg-gray-100 text-gray-500'
@@ -593,11 +594,12 @@ onMounted(async () => {
                   </td>
                   <td class="px-3 py-2">
                     <div class="flex items-center gap-1">
-                      <button v-if="item.status === 'completed' && item.response_data"
+                      <button v-if="(item.status === 'completed' || item.status === 'in_progress') && item.response_data"
                         @click="viewResponse(item)"
-                        class="px-2 py-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-md transition-colors"
-                        title="View response">
-                        View Response
+                        :class="item.status === 'in_progress' ? 'text-blue-700 bg-blue-50 hover:bg-blue-100' : 'text-green-700 bg-green-50 hover:bg-green-100'"
+                        class="px-2 py-1 text-xs font-medium rounded-md transition-colors"
+                        :title="item.status === 'in_progress' ? 'View partial response' : 'View response'">
+                        {{ item.status === 'in_progress' ? 'View Partial' : 'View Response' }}
                       </button>
                       <span v-else-if="item.status === 'completed'" class="text-xs text-gray-400">Completed</span>
                       <span v-else-if="item.sent_at" class="text-xs text-gray-400">{{ formatDate(item.sent_at) }}</span>

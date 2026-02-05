@@ -15,12 +15,128 @@ const isSubmitting = ref(false)
 const isSubmitted = ref(false)
 const alreadyCompleted = ref(false)
 const responses = ref({})
+const currentPage = ref(0)
+const prepopulatedValues = ref({})
+const editingPrepopulated = ref({})
+
+// Group survey items into pages, using page_break to split
+const surveyPages = computed(() => {
+  if (!survey.value?.config?.items) return []
+
+  const pages = []
+  let currentPageItems = []
+
+  survey.value.config.items.forEach(item => {
+    if (item.type === 'page_break') {
+      // Page break encountered - push current page if it has items
+      if (currentPageItems.length > 0) {
+        pages.push(currentPageItems)
+        currentPageItems = []
+      }
+      // Don't include the page_break item itself in any page
+    } else {
+      currentPageItems.push(item)
+    }
+  })
+
+  if (currentPageItems.length > 0) {
+    pages.push(currentPageItems)
+  }
+
+  return pages.length > 0 ? pages : [[]]
+})
+
+const currentItems = computed(() => {
+  return surveyPages.value[currentPage.value] || []
+})
+
+const totalPages = computed(() => surveyPages.value.length)
+
+// Process survey name to replace template variables
+const processedSurveyName = computed(() => {
+  if (!survey.value?.surveyName) return 'Survey'
+
+  let name = survey.value.surveyName
+
+  // Replace {CountyName} with actual county/municipality name
+  if (survey.value.municipality) {
+    name = name.replace(/\{CountyName\}/g, survey.value.municipality)
+  } else if (survey.value.county) {
+    name = name.replace(/\{CountyName\}/g, survey.value.county)
+  }
+
+  // Replace {State} with actual state
+  if (survey.value.state) {
+    name = name.replace(/\{State\}/g, survey.value.state)
+  }
+
+  // Replace {TaxYear} if present in data
+  if (survey.value.taxYear) {
+    name = name.replace(/\{TaxYear\}/g, survey.value.taxYear)
+  }
+
+  return name
+})
+
+async function nextPage() {
+  if (missingOnCurrentPage.value.length > 0) return
+
+  // Save progress before moving to next page
+  try {
+    await axios.patch(`${API_BASE_URL}/survey/${uniqueId}/progress`, {
+      responses: buildResponsePayload()
+    })
+  } catch (err) {
+    console.error('Failed to save progress:', err)
+    // Continue to next page even if save fails
+  }
+
+  if (currentPage.value < totalPages.value - 1) {
+    currentPage.value++
+  }
+}
+
+async function prevPage() {
+  // Save progress before moving to previous page
+  try {
+    await axios.patch(`${API_BASE_URL}/survey/${uniqueId}/progress`, {
+      responses: buildResponsePayload()
+    })
+  } catch (err) {
+    console.error('Failed to save progress:', err)
+    // Continue to previous page even if save fails
+  }
+
+  if (currentPage.value > 0) {
+    currentPage.value--
+  }
+}
+
 
 // Non-input types that don't collect data
-const displayOnlyTypes = ['section_header', 'heading', 'paragraph']
+const displayOnlyTypes = ['section_header', 'heading', 'paragraph', 'page_break']
 
 function isDisplayOnly(item) {
   return displayOnlyTypes.includes(item.type)
+}
+
+// Prepopulation helpers
+function isPrepopulated(item) {
+  return item.prepopulated && item.id && prepopulatedValues.value[item.id]
+}
+
+function isEditing(item) {
+  return editingPrepopulated.value[item.id] || false
+}
+
+function toggleEdit(item) {
+  if (item.id) {
+    editingPrepopulated.value[item.id] = !editingPrepopulated.value[item.id]
+  }
+}
+
+function isFieldDisabled(item) {
+  return isPrepopulated(item) && !isEditing(item)
 }
 
 // Resolve the HTML input type for a db_field item
@@ -57,21 +173,52 @@ onMounted(async () => {
       survey.value = response.data
     } else {
       survey.value = response.data
+
+      // Store prepopulated values
+      if (response.data.prepopulatedValues) {
+        prepopulatedValues.value = response.data.prepopulatedValues
+      }
+
       // Initialize responses
       const config = response.data.config
       if (config?.items) {
         for (let i = 0; i < config.items.length; i++) {
           const item = config.items[i]
           if (isDisplayOnly(item)) continue
+
           if (item.type === 'due_date_group') {
             // Array of date strings, start with one empty slot
             responses.value[i] = ['']
+
+            // Load prepopulated due dates
+            if (item.prepopulated && item.id) {
+              const dates = []
+              const maxDates = item.maxDates || 10
+              for (let j = 1; j <= maxDates; j++) {
+                const key = `${item.id}_date_${j}`
+                if (prepopulatedValues.value[key]) {
+                  dates.push(prepopulatedValues.value[key])
+                }
+              }
+              if (dates.length > 0) {
+                responses.value[i] = dates
+                // Add empty slot for progressive reveal
+                if (dates.length < maxDates) {
+                  responses.value[i].push('')
+                }
+              }
+            }
           } else if (item.type === 'checkbox') {
             responses.value[i] = false
           } else if (item.type === 'checkboxGroup') {
             responses.value[i] = []
           } else {
-            responses.value[i] = ''
+            // Check if this field has a prepopulated value
+            if (item.prepopulated && item.id && prepopulatedValues.value[item.id]) {
+              responses.value[i] = prepopulatedValues.value[item.id]
+            } else {
+              responses.value[i] = ''
+            }
           }
         }
       }
@@ -107,7 +254,7 @@ function onDueDateChange(index, dateIdx, maxDates) {
   }
 }
 
-// Validate required fields
+// Validate all required fields in the survey
 const missingRequired = computed(() => {
   if (!survey.value?.config?.items) return []
   const missing = []
@@ -127,6 +274,28 @@ const missingRequired = computed(() => {
   }
   return missing
 })
+
+// Validate required fields on the current page
+const missingOnCurrentPage = computed(() => {
+  if (!survey.value?.config?.items) return []
+  const missing = []
+  currentItems.value.forEach((item, index) => {
+    const originalIndex = survey.value.config.items.indexOf(item)
+    if (isDisplayOnly(item)) return
+    if (item.required) {
+      const val = responses.value[originalIndex]
+      if (item.type === 'due_date_group') {
+        const dates = val || []
+        const filled = dates.filter(d => d && d.trim() !== '')
+        if (filled.length === 0) missing.push(originalIndex)
+      } else if (val === '' || val === null || val === undefined || (Array.isArray(val) && val.length === 0)) {
+        missing.push(originalIndex)
+      }
+    }
+  })
+  return missing
+})
+
 
 const canSubmit = computed(() => missingRequired.value.length === 0)
 
@@ -194,7 +363,7 @@ async function handleSubmit() {
           </div>
           <div>
             <h1 class="text-lg font-semibold text-gray-900">
-              {{ survey?.surveyName || 'Survey' }}
+              {{ processedSurveyName }}
             </h1>
             <p v-if="survey && !isSubmitted && !alreadyCompleted" class="text-sm text-gray-500">
               {{ survey.municipality }}, {{ survey.state }}
@@ -261,7 +430,7 @@ async function handleSubmit() {
       <!-- Survey Form -->
       <div v-else-if="survey?.config" class="space-y-6">
         <!-- Survey Title Card -->
-        <div v-if="survey.config.meta" class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div v-if="survey.config.meta && currentPage === 0" class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h2 class="text-xl font-semibold text-gray-900">{{ survey.config.meta.title }}</h2>
           <p v-if="survey.config.meta.introduction" class="text-sm text-gray-600 mt-2">
             {{ survey.config.meta.introduction }}
@@ -291,8 +460,8 @@ async function handleSubmit() {
         <!-- Survey Items -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
           <div
-            v-for="(item, index) in survey.config.items"
-            :key="item.id || index"
+            v-for="(item) in currentItems"
+            :key="item.id || survey.config.items.indexOf(item)"
             class="p-6"
           >
             <!-- Section Header -->
@@ -320,15 +489,15 @@ async function handleSubmit() {
               <p v-if="item.helpText" class="text-xs text-gray-500 mb-3">{{ item.helpText }}</p>
               <div class="space-y-2">
                 <div
-                  v-for="dateIdx in visibleDueDates(index, item.maxDates)"
+                  v-for="dateIdx in visibleDueDates(survey.config.items.indexOf(item), item.maxDates)"
                   :key="dateIdx"
                   class="flex items-center gap-3"
                 >
                   <span class="text-xs text-gray-400 w-20 flex-shrink-0">Due Date {{ dateIdx }}</span>
                   <input
                     type="date"
-                    :value="(responses[index] || [])[dateIdx - 1] || ''"
-                    @input="e => { responses[index][dateIdx - 1] = e.target.value; onDueDateChange(index, dateIdx - 1, item.maxDates) }"
+                    :value="(responses[survey.config.items.indexOf(item)] || [])[dateIdx - 1] || ''"
+                    @input="e => { responses[survey.config.items.indexOf(item)][dateIdx - 1] = e.target.value; onDueDateChange(survey.config.items.indexOf(item), dateIdx - 1, item.maxDates) }"
                     class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                 </div>
@@ -337,42 +506,84 @@ async function handleSubmit() {
 
             <!-- Simple Input (db_field with text/email/phone/url/number/date, or legacy simple types) -->
             <template v-else-if="isSimpleInput(item)">
-              <label class="block text-sm font-medium text-gray-900 mb-1.5">
-                {{ item.customLabel || item.label }}
-                <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
-              </label>
+              <div class="flex items-start justify-between mb-1.5">
+                <label class="block text-sm font-medium text-gray-900">
+                  {{ item.customLabel || item.label }}
+                  <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
+                  <span v-if="isPrepopulated(item) && !isEditing(item)" class="inline-flex items-center gap-1 ml-2 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                    Pre-filled
+                  </span>
+                </label>
+                <button v-if="isPrepopulated(item) && !isEditing(item)" @click="toggleEdit(item)"
+                  type="button"
+                  class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  Edit
+                </button>
+                <button v-if="isPrepopulated(item) && isEditing(item)" @click="toggleEdit(item)"
+                  type="button"
+                  class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                  Done
+                </button>
+              </div>
               <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
                 {{ item.helpText || item.description }}
               </p>
               <input
-                v-model="responses[index]"
+                v-model="responses[survey.config.items.indexOf(item)]"
                 :type="resolveInputType(item)"
-                :placeholder="item.placeholder || ''"
+                :placeholder="isPrepopulated(item) && !isEditing(item) ? 'Auto-filled by system...' : (item.placeholder || '')"
                 :required="item.required"
+                :disabled="isFieldDisabled(item)"
                 class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 :class="[
-                  missingRequired.includes(index) ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  missingOnCurrentPage.includes(survey.config.items.indexOf(item)) ? 'border-red-300 bg-red-50' :
+                  isPrepopulated(item) && !isEditing(item) ? 'bg-green-50 border-green-200 text-green-800 font-medium' :
+                  'border-gray-300'
                 ]"
               />
             </template>
 
             <!-- Textarea (db_field with textarea, or legacy textarea type) -->
             <template v-else-if="isTextarea(item)">
-              <label class="block text-sm font-medium text-gray-900 mb-1.5">
-                {{ item.customLabel || item.label }}
-                <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
-              </label>
+              <div class="flex items-start justify-between mb-1.5">
+                <label class="block text-sm font-medium text-gray-900">
+                  {{ item.customLabel || item.label }}
+                  <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
+                  <span v-if="isPrepopulated(item) && !isEditing(item)" class="inline-flex items-center gap-1 ml-2 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                    Pre-filled
+                  </span>
+                </label>
+                <button v-if="isPrepopulated(item) && !isEditing(item)" @click="toggleEdit(item)"
+                  type="button"
+                  class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  Edit
+                </button>
+                <button v-if="isPrepopulated(item) && isEditing(item)" @click="toggleEdit(item)"
+                  type="button"
+                  class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                  Done
+                </button>
+              </div>
               <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
                 {{ item.helpText || item.description }}
               </p>
               <textarea
-                v-model="responses[index]"
+                v-model="responses[survey.config.items.indexOf(item)]"
                 :rows="item.rows || 3"
-                :placeholder="item.placeholder || ''"
+                :placeholder="isPrepopulated(item) && !isEditing(item) ? 'Auto-filled by system...' : (item.placeholder || '')"
                 :required="item.required"
-                class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                :disabled="isFieldDisabled(item)"
+                class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 :class="[
-                  missingRequired.includes(index) ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  missingOnCurrentPage.includes(survey.config.items.indexOf(item)) ? 'border-red-300 bg-red-50' :
+                  isPrepopulated(item) && !isEditing(item) ? 'bg-green-50 border-green-200 text-green-800 font-medium' :
+                  'border-gray-300'
                 ]"
               ></textarea>
             </template>
@@ -387,11 +598,11 @@ async function handleSubmit() {
                 {{ item.helpText || item.description }}
               </p>
               <select
-                v-model="responses[index]"
+                v-model="responses[survey.config.items.indexOf(item)]"
                 :required="item.required"
                 class="w-full px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 :class="[
-                  missingRequired.includes(index) ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                  missingOnCurrentPage.includes(survey.config.items.indexOf(item)) ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 ]"
               >
                 <option value="" disabled>{{ item.placeholder || 'Select an option...' }}</option>
@@ -418,9 +629,9 @@ async function handleSubmit() {
                 >
                   <input
                     type="radio"
-                    :name="`q_${index}`"
+                    :name="`q_${survey.config.items.indexOf(item)}`"
                     :value="opt.value || opt"
-                    v-model="responses[index]"
+                    v-model="responses[survey.config.items.indexOf(item)]"
                     class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                   />
                   <span class="text-sm text-gray-700">{{ opt.label || opt }}</span>
@@ -433,7 +644,7 @@ async function handleSubmit() {
               <label class="flex items-start gap-2.5 cursor-pointer">
                 <input
                   type="checkbox"
-                  v-model="responses[index]"
+                  v-model="responses[survey.config.items.indexOf(item)]"
                   class="w-4 h-4 mt-0.5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                 />
                 <div>
@@ -461,7 +672,7 @@ async function handleSubmit() {
                   <input
                     type="checkbox"
                     :value="opt.value || opt"
-                    v-model="responses[index]"
+                    v-model="responses[survey.config.items.indexOf(item)]"
                     class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                   />
                   <span class="text-sm text-gray-700">{{ opt.label || opt }}</span>
@@ -472,14 +683,14 @@ async function handleSubmit() {
             <!-- Fallback: render as text input -->
             <template v-else>
               <label class="block text-sm font-medium text-gray-900 mb-1.5">
-                {{ item.customLabel || item.label || item.name || `Question ${index + 1}` }}
+                {{ item.customLabel || item.label || item.name || `Question ${survey.config.items.indexOf(item) + 1}` }}
                 <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
               </label>
               <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
                 {{ item.helpText || item.description }}
               </p>
               <input
-                v-model="responses[index]"
+                v-model="responses[survey.config.items.indexOf(item)]"
                 type="text"
                 :placeholder="item.placeholder || ''"
                 class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
@@ -488,31 +699,54 @@ async function handleSubmit() {
           </div>
         </div>
 
-        <!-- Submit -->
+        <!-- Pagination Controls -->
         <div class="flex items-center justify-between">
-          <p v-if="missingRequired.length > 0" class="text-sm text-red-500">
-            Please complete all required fields
-          </p>
-          <div v-else></div>
+          <div>
+            <button
+              v-if="currentPage > 0"
+              @click="prevPage"
+              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Previous
+            </button>
+          </div>
 
-          <button
-            @click="handleSubmit"
-            :disabled="!canSubmit || isSubmitting"
-            class="flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-lg text-white transition-colors"
-            :class="canSubmit && !isSubmitting
-              ? 'bg-indigo-600 hover:bg-indigo-700'
-              : 'bg-gray-300 cursor-not-allowed'"
-          >
-            <svg v-if="isSubmitting" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25" />
-              <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" class="opacity-75" />
-            </svg>
-            <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
-            {{ isSubmitting ? 'Submitting...' : 'Submit Survey' }}
-          </button>
+          <div class="flex items-center gap-4">
+            <p v-if="missingOnCurrentPage.length > 0 && currentPage < totalPages -1" class="text-sm text-red-500">
+              Please complete all required fields
+            </p>
+            <span class="text-sm text-gray-500">
+              Page {{ currentPage + 1 }} of {{ totalPages }}
+            </span>
+            <button
+              v-if="currentPage < totalPages - 1"
+              @click="nextPage"
+              :disabled="missingOnCurrentPage.length > 0"
+              class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+
+            <button
+              v-if="currentPage === totalPages - 1"
+              @click="handleSubmit"
+              :disabled="!canSubmit || isSubmitting"
+              class="flex items-center gap-2 px-6 py-2.5 text-sm font-medium rounded-lg text-white transition-colors"
+              :class="canSubmit && !isSubmitting
+                ? 'bg-indigo-600 hover:bg-indigo-700'
+                : 'bg-gray-300 cursor-not-allowed'"
+            >
+              <svg v-if="isSubmitting" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" class="opacity-25" />
+                <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" class="opacity-75" />
+              </svg>
+              <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+              {{ isSubmitting ? 'Submitting...' : 'Submit Survey' }}
+            </button>
+          </div>
         </div>
       </div>
     </main>

@@ -918,6 +918,40 @@ app.get('/api/survey/:uniqueId', async (req, res) => {
 
     const processedConfig = substituteVars(config);
 
+    // Extract prepopulated values from research_results
+    const prepopulatedValues = {};
+    if (processedConfig.items) {
+      for (const configItem of processedConfig.items) {
+        // Handle db_field prepopulation
+        if (configItem.prepopulated && configItem.type === 'db_field' && configItem.dbField) {
+          const value = item[configItem.dbField];
+          if (value !== null && value !== undefined && value !== '') {
+            prepopulatedValues[configItem.id] = value;
+          }
+        }
+
+        // Handle custom field prepopulation (if they have a dbField mapping)
+        if (configItem.prepopulated && configItem.type === 'custom' && configItem.dbField) {
+          const value = item[configItem.dbField];
+          if (value !== null && value !== undefined && value !== '') {
+            prepopulatedValues[configItem.id] = value;
+          }
+        }
+
+        // Handle due_date_group prepopulation
+        if (configItem.prepopulated && configItem.type === 'due_date_group') {
+          const maxDates = configItem.maxDates || 10;
+          for (let i = 1; i <= maxDates; i++) {
+            const dateField = `due_date_${i}`;
+            const value = item[dateField];
+            if (value !== null && value !== undefined && value !== '') {
+              prepopulatedValues[`${configItem.id}_date_${i}`] = value;
+            }
+          }
+        }
+      }
+    }
+
     res.json({
       success: true,
       completed: false,
@@ -926,7 +960,8 @@ app.get('/api/survey/:uniqueId', async (req, res) => {
       municipality: item.municipality_name || item.county_name,
       state: item.state,
       county: item.county_name,
-      config: processedConfig
+      config: processedConfig,
+      prepopulatedValues: prepopulatedValues
     });
   } catch (error) {
     console.error('Get public survey error:', error);
@@ -935,6 +970,37 @@ app.get('/api/survey/:uniqueId', async (req, res) => {
 });
 
 // Submit survey response (public)
+// Save survey progress (partial responses) without marking as completed
+app.patch('/api/survey/:uniqueId/progress', async (req, res) => {
+  try {
+    const { responses } = req.body;
+    if (!responses || typeof responses !== 'object') {
+      return res.status(400).json({ error: 'responses object is required' });
+    }
+
+    const item = await db.getQueueItemByUniqueId(req.params.uniqueId);
+    if (!item) {
+      return res.status(404).json({ error: 'Survey not found' });
+    }
+    if (item.status === 'completed') {
+      return res.status(409).json({ error: 'This survey has already been completed' });
+    }
+    if (item.status === 'cancelled') {
+      return res.status(410).json({ error: 'This survey has been cancelled' });
+    }
+
+    const updated = await db.saveSurveyProgress(req.params.uniqueId, responses);
+    if (!updated) {
+      return res.status(400).json({ error: 'Unable to save progress' });
+    }
+
+    res.json({ success: true, message: 'Progress saved successfully' });
+  } catch (error) {
+    console.error('Save progress error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/survey/:uniqueId/submit', async (req, res) => {
   try {
     const { responses } = req.body;

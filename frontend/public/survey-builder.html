@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Survey Builder - Inveritax</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3.4/dist/vue.global.prod.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] },
+          colors: {
+            primary: {
+              50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
+              400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
+              800: '#3730a3', 900: '#312e81'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .drag-over-top { border-top: 2px solid #4f46e5 !important; }
+    .drag-over-bottom { border-bottom: 2px solid #4f46e5 !important; }
+    .dragging { opacity: 0.5; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+  <div id="app">
+    <!-- Top Bar -->
+    <div class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
+      <div class="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+          </div>
+          <h1 class="text-lg font-semibold text-gray-900">Survey Builder</h1>
+          <span class="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">Mockup</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-gray-500">{{ itemCount }} item{{ itemCount !== 1 ? 's' : '' }} in survey</span>
+          <span class="text-gray-300">|</span>
+          <button @click="toggleMetadata" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors"
+            :class="showMetadata ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-100'">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            Settings
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Panel (collapsible) -->
+    <div v-if="showMetadata" class="bg-white border-b border-gray-200">
+      <div class="max-w-[1600px] mx-auto px-6 py-5">
+        <div class="grid grid-cols-3 gap-6">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Survey Title</label>
+            <input v-model="surveyConfig.meta.title" type="text" placeholder="e.g., Annual Treasurer Information Survey"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Introduction Text</label>
+            <textarea v-model="surveyConfig.meta.introduction" rows="2" placeholder="Brief intro shown at the top of the survey..."
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">Thank You Message</label>
+            <textarea v-model="surveyConfig.meta.thankYouMessage" rows="2" placeholder="Message shown after submission..."
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-[1600px] mx-auto flex" style="height: calc(100vh - 120px);">
+      <!-- Builder Panel (Left) -->
+      <div class="w-2/5 border-r border-gray-200 bg-white overflow-y-auto p-5 space-y-5">
+
+        <!-- Field Palette -->
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div class="p-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-gray-900">Database Fields</h2>
+            <input v-model="paletteSearch" type="text" placeholder="Filter fields..."
+              class="w-40 px-2.5 py-1 text-xs border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+          </div>
+          <div class="divide-y divide-gray-100">
+            <div v-for="(cat, catKey) in DB_FIELD_REGISTRY" :key="catKey">
+              <button @click="toggleCategory(catKey)"
+                class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                <span class="flex items-center gap-2">
+                  <span v-html="ICONS[cat.icon]" class="w-4 h-4 text-gray-400"></span>
+                  {{ cat.label }}
+                  <span class="text-xs text-gray-400 font-normal">({{ filteredFields(catKey).length }})</span>
+                </span>
+                <svg class="w-4 h-4 text-gray-400 transition-transform" :class="{ 'rotate-180': !collapsedCategories[catKey] }"
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,9 12,15 18,9"/></svg>
+              </button>
+              <div v-if="!collapsedCategories[catKey]" class="px-4 pb-2 space-y-0.5">
+                <button v-for="field in filteredFields(catKey)" :key="field.dbField"
+                  @click="toggleDbField(catKey, field)"
+                  class="w-full flex items-center gap-2.5 px-2.5 py-1.5 text-sm rounded-lg transition-colors"
+                  :class="isFieldInSurvey(field.dbField) ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50'">
+                  <span class="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0"
+                    :class="isFieldInSurvey(field.dbField) ? 'bg-primary-600 border-primary-600' : 'border-gray-300'">
+                    <svg v-if="isFieldInSurvey(field.dbField)" class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>
+                  </span>
+                  {{ field.label }}
+                  <span class="ml-auto text-xs text-gray-400">{{ field.inputType }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Custom Items -->
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+          <h2 class="text-sm font-semibold text-gray-900">Add Items</h2>
+          <div class="grid grid-cols-2 gap-2">
+            <button @click="showCustomTypeModal = true"
+              class="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Custom Question
+            </button>
+            <button @click="addSectionHeader"
+              class="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h8"/><path d="M4 18V6"/><path d="M12 18V6"/></svg>
+              Section Header
+            </button>
+            <button @click="addInstructions"
+              class="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Instructions
+            </button>
+            <button @click="addDueDateGroup"
+              class="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors col-span-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+              Due Date Group (auto-grow)
+            </button>
+            <button @click="addPageBreak"
+              class="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors col-span-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/></svg>
+              Page Break
+            </button>
+          </div>
+        </div>
+
+        <!-- Template Variables Palette -->
+        <div class="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <button @click="showTemplateVars = !showTemplateVars"
+            class="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 transition-colors rounded-xl">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/></svg>
+              Template Variables
+            </span>
+            <svg class="w-4 h-4 text-gray-400 transition-transform" :class="{ 'rotate-180': showTemplateVars }"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
+          </button>
+          <div v-if="showTemplateVars" class="px-4 pb-3 space-y-1 border-t border-gray-100">
+            <p class="text-xs text-gray-500 mt-2 mb-2">Click to copy, then paste into titles, labels, instructions, or help text.</p>
+            <button v-for="tv in TEMPLATE_VARIABLES" :key="tv.key"
+              @click="insertVariable(tv.key)"
+              class="w-full flex items-center justify-between px-2.5 py-1.5 text-sm rounded-lg text-gray-600 hover:bg-purple-50 hover:text-purple-700 transition-colors">
+              <code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded font-mono">{{ tv.key }}</code>
+              <span class="text-xs text-gray-400">{{ tv.label }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom Question Type Modal -->
+        <div v-if="showCustomTypeModal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" @click.self="showCustomTypeModal = false">
+          <div class="bg-white rounded-xl shadow-xl border border-gray-200 p-6 w-96 space-y-4">
+            <h3 class="text-base font-semibold text-gray-900">Choose Question Type</h3>
+            <div class="grid grid-cols-2 gap-2">
+              <button v-for="qt in QUESTION_TYPES" :key="qt.value" @click="addCustomQuestion(qt.value)"
+                class="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors text-sm">
+                <span v-html="ICONS[qt.icon]" class="w-5 h-5 text-gray-500"></span>
+                <span class="font-medium text-gray-700">{{ qt.label }}</span>
+              </button>
+            </div>
+            <button @click="showCustomTypeModal = false"
+              class="w-full px-3 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+
+        <!-- Survey Items (Sortable) -->
+        <div class="space-y-1">
+          <div class="flex items-center justify-between px-1 mb-2">
+            <h2 class="text-sm font-semibold text-gray-900">Survey Items</h2>
+            <span v-if="surveyConfig.items.length" class="text-xs text-gray-400">Drag to reorder</span>
+          </div>
+
+          <div v-if="!surveyConfig.items.length" class="text-center py-12 text-gray-400">
+            <svg class="w-10 h-10 mx-auto mb-3 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+            <p class="text-sm">No items yet. Click fields above or add custom items.</p>
+          </div>
+
+          <div v-for="(item, index) in surveyConfig.items" :key="item.id"
+            draggable="true"
+            @dragstart="onDragStart(index, $event)"
+            @dragover.prevent="onDragOver(index, $event)"
+            @dragleave="onDragLeave(index)"
+            @drop="onDrop(index, $event)"
+            @dragend="onDragEnd"
+            :class="[
+              'bg-white rounded-lg border shadow-sm transition-all',
+              dragOverIndex === index ? 'drag-over-top' : '',
+              dragIndex === index ? 'dragging' : '',
+              item.type === 'section_header' ? 'border-blue-200' : item.type === 'instructions' ? 'border-amber-200' : item.type === 'page_break' ? 'border-purple-300' : 'border-gray-200'
+            ]">
+            <!-- Item Header (click row to expand) -->
+            <div class="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors" @click="toggleExpand(item.id)">
+              <!-- Drag Handle (stop propagation so drag doesn't trigger expand) -->
+              <span class="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 flex-shrink-0" @click.stop>
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="5" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+              </span>
+
+              <!-- Expand Chevron (leading) -->
+              <svg class="w-4 h-4 text-gray-400 transition-transform flex-shrink-0" :class="{ 'rotate-180': expandedItemId === item.id }"
+                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,9 12,15 18,9"/></svg>
+
+              <!-- Type Badge -->
+              <span class="text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0"
+                :class="{
+                  'bg-primary-100 text-primary-700': item.type === 'db_field',
+                  'bg-green-100 text-green-700': item.type === 'custom',
+                  'bg-blue-100 text-blue-700': item.type === 'section_header',
+                  'bg-amber-100 text-amber-700': item.type === 'instructions',
+                  'bg-indigo-100 text-indigo-700': item.type === 'due_date_group',
+                  'bg-purple-100 text-purple-700': item.type === 'page_break'
+                }">
+                {{ item.type === 'db_field' ? 'DB' : item.type === 'custom' ? 'Custom' : item.type === 'section_header' ? 'Section' : item.type === 'due_date_group' ? 'Dates' : item.type === 'page_break' ? 'Page' : 'Info' }}
+              </span>
+
+              <!-- Conditional Indicator -->
+              <span v-if="item.condition" class="flex-shrink-0 text-amber-500" title="Has visibility condition">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              </span>
+
+              <!-- Pre-populated Indicator -->
+              <span v-if="item.prepopulated" class="flex-shrink-0 text-green-500" title="Pre-populated field">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              </span>
+
+              <!-- Label -->
+              <span class="text-sm text-gray-700 truncate flex-1">
+                {{ item.type === 'page_break' ? '─── Page Break ───' : (item.customLabel || item.label || item.content || 'Untitled') }}
+              </span>
+
+              <!-- Required Star -->
+              <button v-if="item.type === 'db_field' || item.type === 'custom' || item.type === 'due_date_group'" @click.stop="item.required = !item.required"
+                class="flex-shrink-0 p-1 rounded transition-colors"
+                :class="item.required ? 'text-amber-500' : 'text-gray-300 hover:text-gray-400'"
+                title="Toggle required">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" :fill="item.required ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+              </button>
+
+              <!-- Move buttons -->
+              <button v-if="index > 0" @click.stop="moveItem(index, -1)" class="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 transition-colors" title="Move up">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18,15 12,9 6,15"/></svg>
+              </button>
+              <button v-if="index < surveyConfig.items.length - 1" @click.stop="moveItem(index, 1)" class="flex-shrink-0 p-1 text-gray-400 hover:text-gray-600 transition-colors" title="Move down">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,9 12,15 18,9"/></svg>
+              </button>
+
+              <!-- Delete -->
+              <button @click.stop="removeItem(index)" class="flex-shrink-0 p-1 text-gray-400 hover:text-red-500 transition-colors" title="Remove">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+
+            <!-- Expanded Config -->
+            <div v-if="expandedItemId === item.id" class="border-t border-gray-100 px-4 py-3 bg-gray-50/50 space-y-3">
+              <!-- Page Break config -->
+              <template v-if="item.type === 'page_break'">
+                <div class="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-700">
+                  Page breaks split the survey into multiple pages. Respondents will see "Next" and "Previous" buttons to navigate between pages.
+                </div>
+              </template>
+
+              <!-- Section / Instructions config -->
+              <template v-else-if="item.type === 'section_header' || item.type === 'instructions'">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">{{ item.type === 'section_header' ? 'Heading Text' : 'Instruction Text' }}</label>
+                  <textarea v-model="item.content" rows="2"
+                    class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                    :placeholder="item.type === 'section_header' ? 'e.g., Tax Year Information' : 'e.g., Please provide the most current information available...'"></textarea>
+                </div>
+              </template>
+
+              <!-- Due Date Group config -->
+              <template v-else-if="item.type === 'due_date_group'">
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Group Label</label>
+                    <input v-model="item.customLabel" type="text" :placeholder="item.label"
+                      class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Max Due Dates</label>
+                    <input v-model.number="item.maxDates" type="number" min="1" max="10" placeholder="10"
+                      class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Help Text</label>
+                  <input v-model="item.helpText" type="text" placeholder="Optional description..."
+                    class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+                </div>
+                <div class="bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 text-xs text-indigo-700">
+                  Dates appear progressively: the treasurer fills in Due Date 1, then Due Date 2 appears, and so on up to {{ item.maxDates }}.
+                  Maps to DB columns <code class="bg-indigo-100 px-1 rounded">due_date_1</code> through <code class="bg-indigo-100 px-1 rounded">due_date_{{ item.maxDates }}</code>.
+                </div>
+              </template>
+
+              <!-- Field config -->
+              <template v-else>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Custom Label</label>
+                    <input v-model="item.customLabel" type="text" :placeholder="item.label"
+                      class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Placeholder</label>
+                    <input v-model="item.placeholder" type="text" placeholder="Input placeholder text..."
+                      class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">Help Text</label>
+                  <input v-model="item.helpText" type="text" placeholder="Optional description shown below the field..."
+                    class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+                </div>
+
+                <!-- Pre-populate Toggle -->
+                <div class="border-t border-gray-200 pt-3 mt-1">
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" v-model="item.prepopulated"
+                      class="w-4 h-4 rounded border-gray-300 text-green-500 focus:ring-green-500" />
+                    <span class="text-xs font-medium text-gray-600 flex items-center gap-1">
+                      <svg class="w-3.5 h-3.5 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                      Pre-populate this field (API will auto-fill on queue creation)
+                    </span>
+                  </label>
+                  <p v-if="item.prepopulated" class="text-xs text-green-600 mt-1 ml-6">
+                    Field will show with a green edit button allowing manual override
+                  </p>
+                </div>
+
+                <!-- Multiple Choice Options -->
+                <div v-if="item.inputType === 'multiple_choice'" class="space-y-2">
+                  <label class="block text-xs font-medium text-gray-600">Options</label>
+                  <div v-for="(opt, oi) in item.options" :key="oi" class="flex items-center gap-2">
+                    <input v-model="item.options[oi]" type="text" :placeholder="'Option ' + (oi + 1)"
+                      class="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+                    <button @click="item.options.splice(oi, 1)" class="text-gray-400 hover:text-red-500 transition-colors" v-if="item.options.length > 1">
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                  <button @click="item.options.push('Option ' + (item.options.length + 1))"
+                    class="text-sm text-primary-600 hover:text-primary-700 font-medium">+ Add Option</button>
+                </div>
+
+                <div v-if="item.type === 'db_field'" class="text-xs text-gray-400">
+                  DB Column: <code class="bg-gray-100 px-1 py-0.5 rounded text-gray-600">{{ item.dbField }}</code>
+                </div>
+              </template>
+
+              <!-- Visibility Condition (all item types) -->
+              <div class="border-t border-gray-200 pt-3 mt-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" :checked="!!item.condition" @change="toggleCondition(item)"
+                    class="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500" />
+                  <span class="text-xs font-medium text-gray-600 flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5 text-amber-500" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    Show conditionally
+                  </span>
+                </label>
+
+                <div v-if="item.condition" class="mt-2 space-y-2 pl-6">
+                  <div>
+                    <label class="block text-xs text-gray-500 mb-1">When this field...</label>
+                    <select v-model="item.condition.sourceItemId"
+                      class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                      <option value="">Select a field...</option>
+                      <option v-for="src in conditionSourceOptions(item.id)" :key="src.id" :value="src.id">
+                        {{ itemDisplayLabel(src) }}
+                      </option>
+                    </select>
+                  </div>
+                  <div v-if="item.condition.sourceItemId" class="grid grid-cols-2 gap-2">
+                    <div>
+                      <select v-model="item.condition.operator"
+                        class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <option v-for="op in operatorsForSource(getSourceItem(item.condition.sourceItemId))" :key="op.value" :value="op.value">
+                          {{ op.label }}
+                        </option>
+                      </select>
+                    </div>
+                    <div v-if="!['is_empty', 'is_not_empty'].includes(item.condition.operator)">
+                      <!-- Dropdown for yes_no / multiple_choice sources -->
+                      <select v-if="valueOptionsForSource(getSourceItem(item.condition.sourceItemId))"
+                        v-model="item.condition.value"
+                        class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <option value="">Select value...</option>
+                        <option v-for="opt in valueOptionsForSource(getSourceItem(item.condition.sourceItemId))" :key="opt" :value="opt">
+                          {{ opt }}
+                        </option>
+                      </select>
+                      <!-- Free text for other types -->
+                      <input v-else v-model="item.condition.value" type="text" placeholder="Value..."
+                        class="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preview Panel (Right) -->
+      <div class="w-3/5 overflow-y-auto bg-gray-50 p-8">
+        <div class="max-w-2xl mx-auto space-y-6">
+          <!-- Preview Header -->
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Live Preview</h2>
+            <div class="flex items-center gap-3">
+              <!-- Simulate Toggle -->
+              <div class="flex items-center gap-2">
+                <button v-if="simulateMode" @click="resetSimulation"
+                  class="px-2 py-1 text-xs font-medium text-gray-500 hover:text-gray-700 transition-colors" title="Reset simulated values">
+                  Reset
+                </button>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <span class="text-xs font-medium" :class="simulateMode ? 'text-amber-600' : 'text-gray-400'">Simulate</span>
+                  <button @click="simulateMode = !simulateMode"
+                    class="relative w-9 h-5 rounded-full transition-colors"
+                    :class="simulateMode ? 'bg-amber-500' : 'bg-gray-300'">
+                    <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
+                      :class="simulateMode ? 'translate-x-4' : ''"></span>
+                  </button>
+                </label>
+              </div>
+              <div class="flex items-center gap-1 bg-gray-200 rounded-lg p-0.5">
+                <button @click="previewMode = 'form'" class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+                  :class="previewMode === 'form' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'">Form</button>
+                <button @click="previewMode = 'thankyou'" class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+                  :class="previewMode === 'thankyou' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'">Thank You</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Simulate Mode Banner -->
+          <div v-if="simulateMode && previewMode === 'form'" class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-center gap-2">
+            <svg class="w-4 h-4 text-amber-500 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <p class="text-xs text-amber-700">Simulation active &mdash; fill in fields to test conditional visibility.</p>
+          </div>
+
+          <!-- Form Preview -->
+          <template v-if="previewMode === 'form'">
+            <!-- Survey Title & Intro -->
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
+              <h1 class="text-2xl font-bold text-gray-900">{{ interpolateTemplate(surveyConfig.meta.title) || 'Untitled Survey' }}</h1>
+              <p v-if="surveyConfig.meta.introduction" class="mt-3 text-gray-600 text-sm leading-relaxed">{{ interpolateTemplate(surveyConfig.meta.introduction) }}</p>
+            </div>
+
+            <!-- Page Indicator -->
+            <div v-if="totalPages > 1" class="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl px-4 py-3 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/></svg>
+                <span class="text-sm font-medium text-purple-700">Page {{ currentPage + 1 }} of {{ totalPages }}</span>
+              </div>
+              <div class="flex gap-1">
+                <button v-for="pageNum in totalPages" :key="pageNum" @click="goToPage(pageNum - 1)"
+                  class="w-8 h-8 rounded-lg text-xs font-medium transition-all"
+                  :class="currentPage === pageNum - 1 ? 'bg-purple-500 text-white' : 'bg-white text-purple-600 hover:bg-purple-100'">
+                  {{ pageNum }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Empty State -->
+            <div v-if="!currentPageItems.length && !surveyConfig.items.length" class="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">
+              <p class="text-gray-400 text-sm">Add fields from the builder panel to see the preview.</p>
+            </div>
+
+            <!-- Empty Page State -->
+            <div v-if="!currentPageItems.length && surveyConfig.items.length" class="bg-white rounded-xl border border-dashed border-purple-300 p-12 text-center">
+              <svg class="w-10 h-10 mx-auto mb-3 text-purple-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/></svg>
+              <p class="text-sm text-purple-600 font-medium">This page is empty</p>
+              <p class="text-xs text-gray-400 mt-1">Add items before this page break or navigate to another page</p>
+            </div>
+
+            <!-- Survey Items -->
+            <template v-for="(item, idx) in currentPageItems" :key="item.id">
+              <!-- Section Header -->
+              <div v-if="item.type === 'section_header'" v-show="isItemVisible(item)" class="pt-4 transition-all">
+                <h2 class="text-lg font-semibold text-gray-900 pb-2 border-b border-gray-200">{{ interpolateTemplate(item.content) || 'Section Title' }}</h2>
+              </div>
+
+              <!-- Instructions -->
+              <div v-else-if="item.type === 'instructions'" v-show="isItemVisible(item)" class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 transition-all">
+                <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <p class="text-sm text-blue-800">{{ interpolateTemplate(item.content) || 'Instructions text...' }}</p>
+              </div>
+
+              <!-- Due Date Group -->
+              <div v-else-if="item.type === 'due_date_group'" v-show="isItemVisible(item)" class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 transition-all">
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">
+                  {{ interpolateTemplate(item.customLabel || item.label) || 'Due Dates' }}
+                  <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
+                </label>
+                <p v-if="item.helpText" class="text-xs text-gray-500 mb-3">{{ interpolateTemplate(item.helpText) }}</p>
+                <div class="space-y-3">
+                  <div v-for="n in visibleDueDates(item)" :key="n" class="flex items-center gap-3">
+                    <span class="text-xs font-medium text-gray-500 w-20 flex-shrink-0">Due Date {{ n }}</span>
+                    <input type="date"
+                      :disabled="!simulateMode"
+                      v-model="previewValues[item.id + '_date_' + n]"
+                      class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg placeholder-gray-400"
+                      :class="simulateMode ? 'bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent' : 'bg-gray-50'" />
+                  </div>
+                  <p v-if="simulateMode && visibleDueDates(item) < item.maxDates" class="text-xs text-gray-400 italic pl-[calc(5rem+0.75rem)]">
+                    Fill in a date above to reveal the next (up to {{ item.maxDates }})
+                  </p>
+                  <p v-if="!simulateMode" class="text-xs text-gray-400 italic pl-[calc(5rem+0.75rem)]">
+                    {{ item.maxDates }} dates total &mdash; enable Simulate to see progressive reveal
+                  </p>
+                </div>
+              </div>
+
+              <!-- Form Field -->
+              <div v-else v-show="isItemVisible(item)" class="bg-white rounded-xl border shadow-sm p-5 transition-all"
+                :class="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'border-green-200 bg-green-50/30' : 'border-gray-200'">
+                <div class="flex items-start justify-between mb-1.5">
+                  <label class="block text-sm font-medium text-gray-700">
+                    {{ interpolateTemplate(item.customLabel || item.label) || 'Untitled Question' }}
+                    <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
+                    <span v-if="item.prepopulated && !isPrepopulatedEditing(item.id)" class="inline-flex items-center gap-1 ml-2 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                      Pre-filled
+                    </span>
+                  </label>
+                  <button v-if="item.prepopulated && !isPrepopulatedEditing(item.id)" @click="togglePrepopulatedEdit(item.id)"
+                    class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    Edit
+                  </button>
+                  <button v-if="item.prepopulated && isPrepopulatedEditing(item.id)" @click="togglePrepopulatedEdit(item.id)"
+                    class="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                    Done
+                  </button>
+                </div>
+                <p v-if="item.helpText" class="text-xs text-gray-500 mb-2">{{ interpolateTemplate(item.helpText) }}</p>
+
+                <!-- Text input -->
+                <input v-if="['text', 'email', 'phone', 'url', 'number'].includes(item.inputType)"
+                  :type="item.inputType === 'phone' ? 'tel' : item.inputType"
+                  :placeholder="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'Auto-filled by system...' : (item.placeholder || '')"
+                  :disabled="!simulateMode || (item.prepopulated && !isPrepopulatedEditing(item.id))"
+                  v-model="previewValues[item.id]"
+                  class="w-full px-3 py-2 text-sm border rounded-lg placeholder-gray-400"
+                  :class="[
+                    simulateMode && (!item.prepopulated || isPrepopulatedEditing(item.id)) ? 'bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent' : '',
+                    item.prepopulated && !isPrepopulatedEditing(item.id) ? 'bg-green-50 border-green-200 text-green-800 font-medium' : '',
+                    !simulateMode ? 'bg-gray-50 border-gray-300' : ''
+                  ]" />
+
+                <!-- Date -->
+                <input v-else-if="item.inputType === 'date'"
+                  type="date"
+                  :placeholder="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'Auto-filled by system...' : item.placeholder"
+                  :disabled="!simulateMode || (item.prepopulated && !isPrepopulatedEditing(item.id))"
+                  v-model="previewValues[item.id]"
+                  class="w-full px-3 py-2 text-sm border rounded-lg placeholder-gray-400"
+                  :class="[
+                    simulateMode && (!item.prepopulated || isPrepopulatedEditing(item.id)) ? 'bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent' : '',
+                    item.prepopulated && !isPrepopulatedEditing(item.id) ? 'bg-green-50 border-green-200 text-green-800 font-medium' : '',
+                    !simulateMode ? 'bg-gray-50 border-gray-300' : ''
+                  ]" />
+
+                <!-- Textarea -->
+                <textarea v-else-if="item.inputType === 'textarea'"
+                  rows="3"
+                  :placeholder="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'Auto-filled by system...' : (item.placeholder || '')"
+                  :disabled="!simulateMode || (item.prepopulated && !isPrepopulatedEditing(item.id))"
+                  v-model="previewValues[item.id]"
+                  class="w-full px-3 py-2 text-sm border rounded-lg placeholder-gray-400 resize-none"
+                  :class="[
+                    simulateMode && (!item.prepopulated || isPrepopulatedEditing(item.id)) ? 'bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent' : '',
+                    item.prepopulated && !isPrepopulatedEditing(item.id) ? 'bg-green-50 border-green-200 text-green-800 font-medium' : '',
+                    !simulateMode ? 'bg-gray-50 border-gray-300' : ''
+                  ]"></textarea>
+
+                <!-- Multiple Choice -->
+                <div v-else-if="item.inputType === 'multiple_choice'" class="space-y-2">
+                  <label v-for="(opt, oi) in (item.options || [])" :key="oi"
+                    class="flex items-center gap-2.5 py-1.5" :class="simulateMode && (!item.prepopulated || isPrepopulatedEditing(item.id)) ? 'cursor-pointer' : ''">
+                    <input type="radio" :name="'preview_' + item.id" :value="opt" :disabled="!simulateMode || (item.prepopulated && !isPrepopulatedEditing(item.id))"
+                      v-model="previewValues[item.id]"
+                      class="w-4 h-4 text-primary-600 border-gray-300" />
+                    <span class="text-sm" :class="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'text-green-800 font-medium' : 'text-gray-700'">{{ opt }}</span>
+                  </label>
+                </div>
+
+                <!-- Yes/No -->
+                <div v-else-if="item.inputType === 'yes_no'" class="flex gap-4">
+                  <label class="flex items-center gap-2.5 py-1.5" :class="simulateMode && (!item.prepopulated || isPrepopulatedEditing(item.id)) ? 'cursor-pointer' : ''">
+                    <input type="radio" :name="'preview_' + item.id" value="Yes" :disabled="!simulateMode || (item.prepopulated && !isPrepopulatedEditing(item.id))"
+                      v-model="previewValues[item.id]"
+                      class="w-4 h-4 text-primary-600 border-gray-300" />
+                    <span class="text-sm" :class="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'text-green-800 font-medium' : 'text-gray-700'">Yes</span>
+                  </label>
+                  <label class="flex items-center gap-2.5 py-1.5" :class="simulateMode && (!item.prepopulated || isPrepopulatedEditing(item.id)) ? 'cursor-pointer' : ''">
+                    <input type="radio" :name="'preview_' + item.id" value="No" :disabled="!simulateMode || (item.prepopulated && !isPrepopulatedEditing(item.id))"
+                      v-model="previewValues[item.id]"
+                      class="w-4 h-4 text-primary-600 border-gray-300" />
+                    <span class="text-sm" :class="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'text-green-800 font-medium' : 'text-gray-700'">No</span>
+                  </label>
+                </div>
+              </div>
+            </template>
+
+            <!-- Navigation Buttons -->
+            <div v-if="surveyConfig.items.length && totalPages > 1" class="pt-4 flex gap-3">
+              <button @click="prevPage" v-if="!isFirstPage"
+                class="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium rounded-xl bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15,18 9,12 15,6"/></svg>
+                Previous
+              </button>
+              <button @click="nextPage" v-if="!isLastPage"
+                class="flex-1 flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium rounded-xl bg-primary-600 text-white hover:bg-primary-700 transition-colors">
+                Next
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,18 15,12 9,6"/></svg>
+              </button>
+              <button disabled v-if="isLastPage"
+                class="flex-1 px-6 py-3 text-sm font-medium rounded-xl bg-primary-600 text-white opacity-70 cursor-not-allowed">
+                Submit Survey
+              </button>
+            </div>
+
+            <!-- Submit Button (single page or no pages) -->
+            <div v-if="surveyConfig.items.length && totalPages === 1" class="pt-4">
+              <button disabled class="w-full px-6 py-3 text-sm font-medium rounded-xl bg-primary-600 text-white opacity-70 cursor-not-allowed">
+                Submit Survey
+              </button>
+            </div>
+          </template>
+
+          <!-- Thank You Preview -->
+          <template v-if="previewMode === 'thankyou'">
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+              <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>
+              </div>
+              <h2 class="text-xl font-bold text-gray-900 mb-2">Survey Complete</h2>
+              <p class="text-gray-600 text-sm">{{ interpolateTemplate(surveyConfig.meta.thankYouMessage) || 'Thank you for your submission.' }}</p>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Toolbar -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
+      <div class="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <button @click="exportJson"
+            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export JSON
+          </button>
+          <label class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import JSON
+            <input type="file" accept=".json" @change="importJson" class="hidden" />
+          </label>
+          <button @click="copyJson"
+            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy JSON
+          </button>
+        </div>
+        <div class="flex items-center gap-3">
+          <button @click="newSurvey"
+            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg text-red-600 hover:bg-red-50 transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>
+            New Survey
+          </button>
+          <span v-if="toast" class="text-sm font-medium px-3 py-1 rounded-lg"
+            :class="toast.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'">
+            {{ toast.message }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed, watch, onMounted } = Vue
+
+    // ─── Icons (inline SVG strings) ───
+    const ICONS = {
+      calendar: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+      user: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+      'map-pin': '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+      globe: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+      'file-text': '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>',
+      settings: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+      type: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,7 4,4 20,4 20,7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>',
+      hash: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>',
+      list: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+      'toggle-left': '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="5" width="22" height="14" rx="7" ry="7"/><circle cx="8" cy="12" r="3"/></svg>',
+      'align-left': '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>'
+    }
+
+    // ─── DB Field Registry ───
+    const DB_FIELD_REGISTRY = {
+      tax: {
+        label: 'Tax Information',
+        icon: 'calendar',
+        fields: [
+          { dbField: 'current_tax_year', label: 'Current Tax Year', inputType: 'text' },
+          { dbField: 'num_installments', label: 'Number of Installments', inputType: 'number' },
+          { dbField: 'due_date_1', label: 'Due Date 1', inputType: 'date' },
+          { dbField: 'due_date_2', label: 'Due Date 2', inputType: 'date' },
+          { dbField: 'due_date_3', label: 'Due Date 3', inputType: 'date' },
+          { dbField: 'due_date_4', label: 'Due Date 4', inputType: 'date' },
+          { dbField: 'due_date_5', label: 'Due Date 5', inputType: 'date' },
+          { dbField: 'due_date_6', label: 'Due Date 6', inputType: 'date' },
+          { dbField: 'due_date_7', label: 'Due Date 7', inputType: 'date' },
+          { dbField: 'due_date_8', label: 'Due Date 8', inputType: 'date' },
+          { dbField: 'due_date_9', label: 'Due Date 9', inputType: 'date' },
+          { dbField: 'due_date_10', label: 'Due Date 10', inputType: 'date' },
+          { dbField: 'tax_billing_date', label: 'Tax Billing Date', inputType: 'date' },
+          { dbField: 'delq_search_start_date', label: 'Delinquent Search Start Date', inputType: 'date' },
+          { dbField: 'default_escrow_search_start_date', label: 'Default Escrow Search Start Date', inputType: 'date' }
+        ]
+      },
+      contact: {
+        label: 'Contact Information',
+        icon: 'user',
+        fields: [
+          { dbField: 'primary_contact_name', label: 'Contact Name', inputType: 'text' },
+          { dbField: 'primary_contact_title', label: 'Contact Title', inputType: 'text' },
+          { dbField: 'primary_contact_phone', label: 'Contact Phone', inputType: 'phone' },
+          { dbField: 'primary_contact_email', label: 'Contact Email', inputType: 'email' }
+        ]
+      },
+      address: {
+        label: 'Address Information',
+        icon: 'map-pin',
+        fields: [
+          { dbField: 'tax_authority_physical_address', label: 'Physical Address', inputType: 'textarea' },
+          { dbField: 'tax_authority_mailing_address', label: 'Mailing Address', inputType: 'textarea' }
+        ]
+      },
+      online: {
+        label: 'Online Information',
+        icon: 'globe',
+        fields: [
+          { dbField: 'web_address', label: 'Main Website', inputType: 'url' },
+          { dbField: 'county_website', label: 'County Website', inputType: 'url' },
+          { dbField: 'pay_taxes_url', label: 'Tax Payment Portal', inputType: 'url' }
+        ]
+      },
+      additional: {
+        label: 'Additional Information',
+        icon: 'file-text',
+        fields: [
+          { dbField: 'general_phone_number', label: 'General Phone Number', inputType: 'phone' },
+          { dbField: 'fax_number', label: 'Fax Number', inputType: 'phone' },
+          { dbField: 'notes', label: 'Notes', inputType: 'textarea' }
+        ]
+      },
+      collection: {
+        label: 'Collection Settings',
+        icon: 'settings',
+        fields: [
+          { dbField: 'default_delq_collector', label: 'Default Delinquent Collector', inputType: 'text' },
+          { dbField: 'default_escrow_collector', label: 'Default Escrow Collector', inputType: 'text' }
+        ]
+      }
+    }
+
+    // ─── Custom Question Types ───
+    const QUESTION_TYPES = [
+      { value: 'text', label: 'Short Text', icon: 'type' },
+      { value: 'textarea', label: 'Long Text', icon: 'align-left' },
+      { value: 'number', label: 'Number', icon: 'hash' },
+      { value: 'date', label: 'Date', icon: 'calendar' },
+      { value: 'multiple_choice', label: 'Multiple Choice', icon: 'list' },
+      { value: 'yes_no', label: 'Yes / No', icon: 'toggle-left' }
+    ]
+
+    // ─── Condition Operators ───
+    const OPERATORS = [
+      { value: 'equals', label: 'equals' },
+      { value: 'not_equals', label: 'does not equal' },
+      { value: 'greater_than', label: 'is greater than' },
+      { value: 'less_than', label: 'is less than' },
+      { value: 'contains', label: 'contains' },
+      { value: 'is_empty', label: 'is empty' },
+      { value: 'is_not_empty', label: 'is not empty' }
+    ]
+
+    const STORAGE_KEY = 'inveritax-survey-builder-config'
+
+    function makeDefaultConfig() {
+      return {
+        meta: {
+          id: crypto.randomUUID(),
+          title: 'Treasurer Information Survey',
+          introduction: '',
+          thankYouMessage: 'Thank you for completing this survey. Your responses help us maintain accurate records.',
+          createdAt: new Date().toISOString(),
+          updatedAt: null
+        },
+        items: []
+      }
+    }
+
+    // ─── Vue App ───
+    const app = createApp({
+      setup() {
+        const surveyConfig = ref(makeDefaultConfig())
+        const showMetadata = ref(false)
+        const showCustomTypeModal = ref(false)
+        const expandedItemId = ref(null)
+        const paletteSearch = ref('')
+        const collapsedCategories = ref({})
+        const previewMode = ref('form')
+        const toast = ref(null)
+        const dragIndex = ref(null)
+        const dragOverIndex = ref(null)
+        const simulateMode = ref(false)
+        const previewValues = ref({})
+        const showTemplateVars = ref(false)
+        const currentPage = ref(0)
+        const editingPrepopulated = ref({})
+
+        // ─── Template Variables ───
+        const TEMPLATE_VARIABLES = [
+          { key: '{CountyName}', label: 'County Name', sample: 'Cook County' },
+          { key: '{State}', label: 'State', sample: 'IL' },
+          { key: '{StateName}', label: 'State Name', sample: 'Illinois' },
+          { key: '{MunicipalityName}', label: 'Municipality', sample: 'Chicago' },
+          { key: '{TreasurerName}', label: 'Treasurer Name', sample: 'John Smith' },
+          { key: '{TreasurerEmail}', label: 'Treasurer Email', sample: 'treasurer@example.com' },
+          { key: '{TreasurerPhone}', label: 'Treasurer Phone', sample: '(555) 123-4567' },
+          { key: '{TaxYear}', label: 'Tax Year', sample: '2025' }
+        ]
+
+        function interpolateTemplate(text) {
+          if (!text) return text
+          let result = text
+          for (const v of TEMPLATE_VARIABLES) {
+            result = result.replaceAll(v.key, v.sample)
+          }
+          return result
+        }
+
+        function insertVariable(varKey) {
+          navigator.clipboard.writeText(varKey)
+          showToast('Copied ' + varKey + ' to clipboard')
+        }
+
+        // ─── Computed ───
+        const itemCount = computed(() => surveyConfig.value.items.length)
+
+        const pages = computed(() => {
+          const result = []
+          let currentPageItems = []
+
+          for (const item of surveyConfig.value.items) {
+            if (item.type === 'page_break') {
+              if (currentPageItems.length > 0) {
+                result.push(currentPageItems)
+                currentPageItems = []
+              }
+            } else {
+              currentPageItems.push(item)
+            }
+          }
+
+          // Push the last page
+          if (currentPageItems.length > 0) {
+            result.push(currentPageItems)
+          }
+
+          // If no items or only page breaks, return at least one empty page
+          return result.length > 0 ? result : [[]]
+        })
+
+        const totalPages = computed(() => pages.value.length)
+        const currentPageItems = computed(() => pages.value[currentPage.value] || [])
+        const isFirstPage = computed(() => currentPage.value === 0)
+        const isLastPage = computed(() => currentPage.value === totalPages.value - 1)
+
+        // ─── localStorage ───
+        onMounted(() => {
+          const saved = localStorage.getItem(STORAGE_KEY)
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved)
+              if (parsed && parsed.meta && Array.isArray(parsed.items)) {
+                surveyConfig.value = parsed
+              }
+            } catch { /* ignore */ }
+          }
+        })
+
+        watch(surveyConfig, (val) => {
+          val.meta.updatedAt = new Date().toISOString()
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(val))
+        }, { deep: true })
+
+        // ─── Field Palette ───
+        function filteredFields(catKey) {
+          const fields = DB_FIELD_REGISTRY[catKey].fields
+          if (!paletteSearch.value.trim()) return fields
+          const q = paletteSearch.value.toLowerCase()
+          return fields.filter(f => f.label.toLowerCase().includes(q) || f.dbField.toLowerCase().includes(q))
+        }
+
+        function isFieldInSurvey(dbField) {
+          return surveyConfig.value.items.some(i => i.type === 'db_field' && i.dbField === dbField)
+        }
+
+        function toggleDbField(catKey, field) {
+          const idx = surveyConfig.value.items.findIndex(i => i.type === 'db_field' && i.dbField === field.dbField)
+          if (idx >= 0) {
+            surveyConfig.value.items.splice(idx, 1)
+          } else {
+            surveyConfig.value.items.push({
+              id: crypto.randomUUID(),
+              type: 'db_field',
+              dbField: field.dbField,
+              category: catKey,
+              label: field.label,
+              customLabel: '',
+              inputType: field.inputType,
+              required: false,
+              helpText: '',
+              placeholder: '',
+              prepopulated: false,
+              condition: null
+            })
+          }
+        }
+
+        function toggleCategory(catKey) {
+          collapsedCategories.value[catKey] = !collapsedCategories.value[catKey]
+        }
+
+        // ─── Add Items ───
+        function addCustomQuestion(inputType) {
+          const item = {
+            id: crypto.randomUUID(),
+            type: 'custom',
+            label: 'Untitled Question',
+            customLabel: '',
+            inputType: inputType,
+            required: false,
+            helpText: '',
+            placeholder: '',
+            prepopulated: false,
+            options: inputType === 'multiple_choice' ? ['Option 1', 'Option 2'] : [],
+            condition: null
+          }
+          surveyConfig.value.items.push(item)
+          expandedItemId.value = item.id
+          showCustomTypeModal.value = false
+        }
+
+        function addSectionHeader() {
+          const item = {
+            id: crypto.randomUUID(),
+            type: 'section_header',
+            content: '',
+            condition: null
+          }
+          surveyConfig.value.items.push(item)
+          expandedItemId.value = item.id
+        }
+
+        function addInstructions() {
+          const item = {
+            id: crypto.randomUUID(),
+            type: 'instructions',
+            content: '',
+            condition: null
+          }
+          surveyConfig.value.items.push(item)
+          expandedItemId.value = item.id
+        }
+
+        function addDueDateGroup() {
+          const item = {
+            id: crypto.randomUUID(),
+            type: 'due_date_group',
+            label: 'Due Dates',
+            customLabel: '',
+            maxDates: 10,
+            required: false,
+            helpText: 'Fill in a date to reveal the next one.',
+            condition: null
+          }
+          surveyConfig.value.items.push(item)
+          expandedItemId.value = item.id
+        }
+
+        function addPageBreak() {
+          const item = {
+            id: crypto.randomUUID(),
+            type: 'page_break'
+          }
+          surveyConfig.value.items.push(item)
+          expandedItemId.value = item.id
+        }
+
+        function visibleDueDates(item) {
+          if (!simulateMode.value) return item.maxDates
+          let count = 1
+          for (let i = 1; i <= item.maxDates; i++) {
+            const key = item.id + '_date_' + i
+            if (previewValues.value[key]) {
+              count = Math.min(i + 1, item.maxDates)
+            }
+          }
+          return count
+        }
+
+        // ─── Item Management ───
+        function removeItem(index) {
+          surveyConfig.value.items.splice(index, 1)
+        }
+
+        function moveItem(index, direction) {
+          const newIndex = index + direction
+          if (newIndex < 0 || newIndex >= surveyConfig.value.items.length) return
+          const items = surveyConfig.value.items
+          const temp = items[index]
+          items[index] = items[newIndex]
+          items[newIndex] = temp
+        }
+
+        function toggleExpand(id) {
+          expandedItemId.value = expandedItemId.value === id ? null : id
+        }
+
+        // ─── Drag and Drop ───
+        function onDragStart(index, event) {
+          dragIndex.value = index
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData('text/plain', String(index))
+        }
+
+        function onDragOver(index, event) {
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'move'
+          dragOverIndex.value = index
+        }
+
+        function onDragLeave(index) {
+          if (dragOverIndex.value === index) {
+            dragOverIndex.value = null
+          }
+        }
+
+        function onDrop(index, event) {
+          event.preventDefault()
+          const fromIndex = dragIndex.value
+          if (fromIndex !== null && fromIndex !== index) {
+            const items = [...surveyConfig.value.items]
+            const [moved] = items.splice(fromIndex, 1)
+            items.splice(index, 0, moved)
+            surveyConfig.value.items = items
+          }
+          dragIndex.value = null
+          dragOverIndex.value = null
+        }
+
+        function onDragEnd() {
+          dragIndex.value = null
+          dragOverIndex.value = null
+        }
+
+        // ─── Conditions ───
+        function conditionSourceOptions(currentItemId) {
+          return surveyConfig.value.items.filter(i =>
+            i.id !== currentItemId &&
+            (i.type === 'db_field' || i.type === 'custom')
+          )
+        }
+
+        function getSourceItem(sourceId) {
+          return surveyConfig.value.items.find(i => i.id === sourceId) || null
+        }
+
+        function operatorsForSource(sourceItem) {
+          if (!sourceItem) return OPERATORS
+          if (sourceItem.inputType === 'yes_no') {
+            return OPERATORS.filter(o => ['equals', 'not_equals'].includes(o.value))
+          }
+          return OPERATORS
+        }
+
+        function valueOptionsForSource(sourceItem) {
+          if (!sourceItem) return null
+          if (sourceItem.inputType === 'yes_no') return ['Yes', 'No']
+          if (sourceItem.inputType === 'multiple_choice' && sourceItem.options && sourceItem.options.length) {
+            return sourceItem.options
+          }
+          return null
+        }
+
+        function toggleCondition(item) {
+          if (item.condition) {
+            item.condition = null
+          } else {
+            item.condition = { sourceItemId: '', operator: 'equals', value: '' }
+          }
+        }
+
+        function isItemVisible(item) {
+          if (!simulateMode.value) return true
+          if (!item.condition) return true
+          if (!item.condition.sourceItemId) return true
+          const source = surveyConfig.value.items.find(i => i.id === item.condition.sourceItemId)
+          if (!source) return true
+          const val = previewValues.value[source.id] || ''
+          const cmp = item.condition.value || ''
+          switch (item.condition.operator) {
+            case 'equals': return val === cmp
+            case 'not_equals': return val !== cmp
+            case 'greater_than': return Number(val) > Number(cmp)
+            case 'less_than': return Number(val) < Number(cmp)
+            case 'contains': return val.toLowerCase().includes(cmp.toLowerCase())
+            case 'is_empty': return !val
+            case 'is_not_empty': return !!val
+            default: return true
+          }
+        }
+
+        function resetSimulation() {
+          previewValues.value = {}
+          currentPage.value = 0
+          editingPrepopulated.value = {}
+        }
+
+        function togglePrepopulatedEdit(itemId) {
+          editingPrepopulated.value[itemId] = !editingPrepopulated.value[itemId]
+        }
+
+        function isPrepopulatedEditing(itemId) {
+          return editingPrepopulated.value[itemId] || false
+        }
+
+        function nextPage() {
+          if (currentPage.value < totalPages.value - 1) {
+            currentPage.value++
+          }
+        }
+
+        function prevPage() {
+          if (currentPage.value > 0) {
+            currentPage.value--
+          }
+        }
+
+        function goToPage(pageNum) {
+          if (pageNum >= 0 && pageNum < totalPages.value) {
+            currentPage.value = pageNum
+          }
+        }
+
+        function itemDisplayLabel(item) {
+          return item.customLabel || item.label || item.content || 'Untitled'
+        }
+
+        // ─── Metadata ───
+        function toggleMetadata() {
+          showMetadata.value = !showMetadata.value
+        }
+
+        // ─── Export / Import ───
+        function showToast(message, type = 'success') {
+          toast.value = { message, type }
+          setTimeout(() => { toast.value = null }, 3000)
+        }
+
+        function exportJson() {
+          const json = JSON.stringify(surveyConfig.value, null, 2)
+          const blob = new Blob([json], { type: 'application/json' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `survey-config-${new Date().toISOString().slice(0, 10)}.json`
+          a.click()
+          URL.revokeObjectURL(url)
+          showToast('Survey exported')
+        }
+
+        function importJson(event) {
+          const file = event.target.files[0]
+          if (!file) return
+          const reader = new FileReader()
+          reader.onload = (e) => {
+            try {
+              const parsed = JSON.parse(e.target.result)
+              if (!parsed.meta || !Array.isArray(parsed.items)) {
+                throw new Error('Invalid survey config format')
+              }
+              surveyConfig.value = parsed
+              showToast('Survey imported')
+            } catch (err) {
+              showToast('Import failed: ' + err.message, 'error')
+            }
+          }
+          reader.readAsText(file)
+          event.target.value = ''
+        }
+
+        function copyJson() {
+          const json = JSON.stringify(surveyConfig.value, null, 2)
+          navigator.clipboard.writeText(json).then(() => {
+            showToast('Copied to clipboard')
+          }).catch(() => {
+            showToast('Copy failed', 'error')
+          })
+        }
+
+        function newSurvey() {
+          if (surveyConfig.value.items.length > 0 && !confirm('Start a new survey? Current items will be cleared.')) return
+          surveyConfig.value = makeDefaultConfig()
+          localStorage.removeItem(STORAGE_KEY)
+          showToast('New survey created')
+        }
+
+        return {
+          surveyConfig,
+          showMetadata,
+          showCustomTypeModal,
+          expandedItemId,
+          paletteSearch,
+          collapsedCategories,
+          previewMode,
+          toast,
+          dragIndex,
+          dragOverIndex,
+          simulateMode,
+          previewValues,
+          editingPrepopulated,
+          togglePrepopulatedEdit,
+          isPrepopulatedEditing,
+          itemCount,
+          pages,
+          totalPages,
+          currentPageItems,
+          currentPage,
+          isFirstPage,
+          isLastPage,
+          nextPage,
+          prevPage,
+          goToPage,
+          DB_FIELD_REGISTRY,
+          ICONS,
+          QUESTION_TYPES,
+          OPERATORS,
+          filteredFields,
+          isFieldInSurvey,
+          toggleDbField,
+          toggleCategory,
+          addCustomQuestion,
+          addSectionHeader,
+          addInstructions,
+          addDueDateGroup,
+          addPageBreak,
+          visibleDueDates,
+          removeItem,
+          moveItem,
+          toggleExpand,
+          onDragStart,
+          onDragOver,
+          onDragLeave,
+          onDrop,
+          onDragEnd,
+          toggleMetadata,
+          conditionSourceOptions,
+          getSourceItem,
+          operatorsForSource,
+          valueOptionsForSource,
+          toggleCondition,
+          isItemVisible,
+          resetSimulation,
+          itemDisplayLabel,
+          exportJson,
+          importJson,
+          copyJson,
+          newSurvey,
+          TEMPLATE_VARIABLES,
+          showTemplateVars,
+          interpolateTemplate,
+          insertVariable
+        }
+      }
+    })
+
+    app.mount('#app')
+  </script>
+</body>
+</html>

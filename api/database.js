@@ -1290,15 +1290,13 @@ class PostgresDatabase {
           c.state,
           c.county_name,
           c.municipality_name,
-          rr.current_tax_year,
-          rr.primary_contact_name,
-          rr.primary_contact_email,
-          rr.primary_contact_phone
+          c.id as county_id,
+          rr.*
         FROM survey_queue sq
         JOIN survey_configs sc ON sc.id = sq.survey_config_id
         JOIN counties c ON c.id = sq.county_id
         LEFT JOIN LATERAL (
-          SELECT current_tax_year, primary_contact_name, primary_contact_email, primary_contact_phone
+          SELECT *
           FROM research_results
           WHERE county_id = c.id
           ORDER BY research_date DESC NULLS LAST
@@ -1354,7 +1352,7 @@ class PostgresDatabase {
              response_data = $2,
              completed_at = CURRENT_TIMESTAMP,
              updated_at = CURRENT_TIMESTAMP
-         WHERE unique_id = $1 AND status IN ('pending', 'sent')
+         WHERE unique_id = $1 AND status IN ('pending', 'sent', 'in_progress')
          RETURNING *`,
         [uniqueId, JSON.stringify(responseData)]
       );
@@ -1392,6 +1390,29 @@ class PostgresDatabase {
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  async saveSurveyProgress(uniqueId, responseData) {
+    // Save partial survey responses without marking as completed
+    // This allows progressive saving as user fills out multi-page surveys
+    try {
+      const result = await this.pool.query(
+        `UPDATE survey_queue
+         SET response_data = $2,
+             status = CASE
+               WHEN status = 'pending' THEN 'in_progress'
+               ELSE status
+             END,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE unique_id = $1 AND status IN ('pending', 'sent', 'in_progress')
+         RETURNING *`,
+        [uniqueId, JSON.stringify(responseData)]
+      );
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+      console.error('Error saving survey progress:', error);
+      throw error;
     }
   }
 
