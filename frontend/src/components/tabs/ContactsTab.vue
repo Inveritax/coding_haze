@@ -1,6 +1,6 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
-import { Users, Save, AlertCircle, Plus, Trash2, ChevronDown, ChevronUp, GripVertical } from 'lucide-vue-next'
+import { Users, Save, AlertCircle, Plus, Trash2, ChevronDown, ChevronUp, GripVertical, Globe } from 'lucide-vue-next'
 import api from '../../services/api'
 
 const props = defineProps({
@@ -351,6 +351,21 @@ async function handleSave() {
                       class="input"
                     />
                   </div>
+                </div>
+
+                <!-- Scraper Page URL -->
+                <div>
+                  <label class="input-label">
+                    <Globe class="w-4 h-4 inline mr-1.5" />
+                    Scraper Page URL
+                  </label>
+                  <input
+                    :value="contact.scraper_page_url"
+                    @input="updateContactField(contact, 'scraper_page_url', $event.target.value)"
+                    type="url"
+                    placeholder="https://example.com/scraper-page"
+                    class="input"
+                  />
                 </div>
 
                 <!-- Notes -->
