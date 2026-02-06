@@ -78,6 +78,56 @@ const processedSurveyName = computed(() => {
   return name
 })
 
+// Interpolate template variables in any text
+function interpolateTemplate(text) {
+  if (!text || !survey.value) return text
+
+  let result = text
+
+  // {CountyName} - Use municipality or county name
+  if (survey.value.municipality) {
+    result = result.replace(/\{CountyName\}/g, survey.value.municipality)
+    result = result.replace(/\{MunicipalityName\}/g, survey.value.municipality)
+  } else if (survey.value.county) {
+    result = result.replace(/\{CountyName\}/g, survey.value.county)
+    result = result.replace(/\{MunicipalityName\}/g, survey.value.county)
+  }
+
+  // {State} - State abbreviation
+  if (survey.value.state) {
+    result = result.replace(/\{State\}/g, survey.value.state)
+  }
+
+  // {StateName} - Full state name (if available, otherwise use abbreviation)
+  if (survey.value.stateName) {
+    result = result.replace(/\{StateName\}/g, survey.value.stateName)
+  } else if (survey.value.state) {
+    result = result.replace(/\{StateName\}/g, survey.value.state)
+  }
+
+  // {TaxYear}
+  if (survey.value.taxYear) {
+    result = result.replace(/\{TaxYear\}/g, survey.value.taxYear)
+  }
+
+  // {TreasurerName}
+  if (survey.value.treasurerName) {
+    result = result.replace(/\{TreasurerName\}/g, survey.value.treasurerName)
+  }
+
+  // {TreasurerEmail}
+  if (survey.value.treasurerEmail) {
+    result = result.replace(/\{TreasurerEmail\}/g, survey.value.treasurerEmail)
+  }
+
+  // {TreasurerPhone}
+  if (survey.value.treasurerPhone) {
+    result = result.replace(/\{TreasurerPhone\}/g, survey.value.treasurerPhone)
+  }
+
+  return result
+}
+
 async function nextPage() {
   if (missingOnCurrentPage.value.length > 0) return
 
@@ -114,7 +164,7 @@ async function prevPage() {
 
 
 // Non-input types that don't collect data
-const displayOnlyTypes = ['section_header', 'heading', 'paragraph', 'page_break']
+const displayOnlyTypes = ['section_header', 'heading', 'paragraph', 'page_break', 'instructions']
 
 function isDisplayOnly(item) {
   return displayOnlyTypes.includes(item.type)
@@ -139,9 +189,9 @@ function isFieldDisabled(item) {
   return isPrepopulated(item) && !isEditing(item)
 }
 
-// Resolve the HTML input type for a db_field item
+// Resolve the HTML input type for a db_field or custom item
 function resolveInputType(item) {
-  if (item.type === 'db_field') {
+  if (item.type === 'db_field' || item.type === 'custom') {
     const t = item.inputType || 'text'
     if (t === 'phone') return 'tel'
     return t
@@ -151,7 +201,7 @@ function resolveInputType(item) {
 
 // Check if item should render as a simple input (text, email, phone, url, number, date)
 function isSimpleInput(item) {
-  if (item.type === 'db_field') {
+  if (item.type === 'db_field' || item.type === 'custom') {
     const t = item.inputType || 'text'
     return ['text', 'email', 'phone', 'url', 'number', 'date'].includes(t)
   }
@@ -160,8 +210,39 @@ function isSimpleInput(item) {
 
 // Check if item should render as textarea
 function isTextarea(item) {
-  if (item.type === 'db_field') return item.inputType === 'textarea'
-  return item.type === 'textarea'
+  if (item.type === 'db_field' || item.type === 'custom') return item.inputType === 'textarea' || item.inputType === 'file_upload'
+  return item.type === 'textarea' || item.type === 'file_upload'
+}
+
+// Check if item should be visible based on conditional visibility rules
+function isItemVisible(item) {
+  // If no condition, always visible
+  if (!item.condition) return true
+  if (!item.condition.sourceItemId) return true
+
+  // Find the source item
+  const sourceItem = survey.value?.config?.items?.find(i => i.id === item.condition.sourceItemId)
+  if (!sourceItem) return true
+
+  // Get the source item's index in the items array
+  const sourceIndex = survey.value.config.items.indexOf(sourceItem)
+  if (sourceIndex === -1) return true
+
+  // Get the current value of the source item
+  const val = responses.value[sourceIndex] || ''
+  const cmp = item.condition.value || ''
+
+  // Evaluate the condition
+  switch (item.condition.operator) {
+    case 'equals': return val === cmp
+    case 'not_equals': return val !== cmp
+    case 'greater_than': return Number(val) > Number(cmp)
+    case 'less_than': return Number(val) < Number(cmp)
+    case 'contains': return String(val).toLowerCase().includes(String(cmp).toLowerCase())
+    case 'is_empty': return !val
+    case 'is_not_empty': return !!val
+    default: return true
+  }
 }
 
 // Load survey
@@ -421,7 +502,7 @@ async function handleSubmit() {
         </svg>
         <h2 class="text-lg font-medium text-gray-900 mb-2">Thank You!</h2>
         <p v-if="survey?.config?.meta?.thankYouMessage" class="text-gray-500">
-          {{ survey.config.meta.thankYouMessage }}
+          {{ interpolateTemplate(survey.config.meta.thankYouMessage) }}
         </p>
         <p v-else class="text-gray-500">Your survey response has been submitted successfully.</p>
         <p class="text-sm text-gray-400 mt-2">You may close this page.</p>
@@ -431,12 +512,12 @@ async function handleSubmit() {
       <div v-else-if="survey?.config" class="space-y-6">
         <!-- Survey Title Card -->
         <div v-if="survey.config.meta && currentPage === 0" class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <h2 class="text-xl font-semibold text-gray-900">{{ survey.config.meta.title }}</h2>
+          <h2 class="text-xl font-semibold text-gray-900">{{ interpolateTemplate(survey.config.meta.title) }}</h2>
           <p v-if="survey.config.meta.introduction" class="text-sm text-gray-600 mt-2">
-            {{ survey.config.meta.introduction }}
+            {{ interpolateTemplate(survey.config.meta.introduction) }}
           </p>
           <p v-else-if="survey.config.meta.description" class="text-sm text-gray-500 mt-2">
-            {{ survey.config.meta.description }}
+            {{ interpolateTemplate(survey.config.meta.description) }}
           </p>
           <div class="flex items-center gap-2 mt-3 text-sm text-indigo-600">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -462,31 +543,44 @@ async function handleSubmit() {
           <div
             v-for="(item) in currentItems"
             :key="item.id || survey.config.items.indexOf(item)"
+            v-if="isItemVisible(item)"
             class="p-6"
           >
             <!-- Section Header -->
             <template v-if="item.type === 'section_header'">
-              <h3 class="text-lg font-semibold text-gray-900">{{ item.content || item.label }}</h3>
+              <h3 class="text-lg font-semibold text-gray-900">{{ interpolateTemplate(item.content || item.label) }}</h3>
             </template>
 
             <!-- Heading (legacy) -->
             <template v-else-if="item.type === 'heading'">
-              <h3 class="text-lg font-semibold text-gray-900">{{ item.label || item.text }}</h3>
-              <p v-if="item.description" class="text-sm text-gray-500 mt-1">{{ item.description }}</p>
+              <h3 class="text-lg font-semibold text-gray-900">{{ interpolateTemplate(item.label || item.text) }}</h3>
+              <p v-if="item.description" class="text-sm text-gray-500 mt-1">{{ interpolateTemplate(item.description) }}</p>
             </template>
 
             <!-- Paragraph (legacy) -->
             <template v-else-if="item.type === 'paragraph'">
-              <p class="text-sm text-gray-600 leading-relaxed">{{ item.label || item.text }}</p>
+              <p class="text-sm text-gray-600 leading-relaxed">{{ interpolateTemplate(item.label || item.text) }}</p>
+            </template>
+
+            <!-- Instructions -->
+            <template v-else-if="item.type === 'instructions'">
+              <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3">
+                <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <p class="text-sm text-blue-800">{{ interpolateTemplate(item.content || item.label) }}</p>
+              </div>
             </template>
 
             <!-- Due Date Group -->
             <template v-else-if="item.type === 'due_date_group'">
               <label class="block text-sm font-medium text-gray-900 mb-1.5">
-                {{ item.customLabel || item.label }}
+                {{ interpolateTemplate(item.customLabel || item.label) }}
                 <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
               </label>
-              <p v-if="item.helpText" class="text-xs text-gray-500 mb-3">{{ item.helpText }}</p>
+              <p v-if="item.helpText" class="text-xs text-gray-500 mb-3">{{ interpolateTemplate(item.helpText) }}</p>
               <div class="space-y-2">
                 <div
                   v-for="dateIdx in visibleDueDates(survey.config.items.indexOf(item), item.maxDates)"
@@ -508,7 +602,7 @@ async function handleSubmit() {
             <template v-else-if="isSimpleInput(item)">
               <div class="flex items-start justify-between mb-1.5">
                 <label class="block text-sm font-medium text-gray-900">
-                  {{ item.customLabel || item.label }}
+                  {{ interpolateTemplate(item.customLabel || item.label) }}
                   <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
                   <span v-if="isPrepopulated(item) && !isEditing(item)" class="inline-flex items-center gap-1 ml-2 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
                     <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
@@ -529,12 +623,12 @@ async function handleSubmit() {
                 </button>
               </div>
               <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
-                {{ item.helpText || item.description }}
+                {{ interpolateTemplate(item.helpText || item.description) }}
               </p>
               <input
                 v-model="responses[survey.config.items.indexOf(item)]"
                 :type="resolveInputType(item)"
-                :placeholder="isPrepopulated(item) && !isEditing(item) ? 'Auto-filled by system...' : (item.placeholder || '')"
+                :placeholder="isPrepopulated(item) && !isEditing(item) ? 'Auto-filled by system...' : interpolateTemplate(item.placeholder || '')"
                 :required="item.required"
                 :disabled="isFieldDisabled(item)"
                 class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
@@ -550,7 +644,7 @@ async function handleSubmit() {
             <template v-else-if="isTextarea(item)">
               <div class="flex items-start justify-between mb-1.5">
                 <label class="block text-sm font-medium text-gray-900">
-                  {{ item.customLabel || item.label }}
+                  {{ interpolateTemplate(item.customLabel || item.label) }}
                   <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
                   <span v-if="isPrepopulated(item) && !isEditing(item)" class="inline-flex items-center gap-1 ml-2 px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
                     <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
@@ -571,12 +665,12 @@ async function handleSubmit() {
                 </button>
               </div>
               <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
-                {{ item.helpText || item.description }}
+                {{ interpolateTemplate(item.helpText || item.description) }}
               </p>
               <textarea
                 v-model="responses[survey.config.items.indexOf(item)]"
                 :rows="item.rows || 3"
-                :placeholder="isPrepopulated(item) && !isEditing(item) ? 'Auto-filled by system...' : (item.placeholder || '')"
+                :placeholder="isPrepopulated(item) && !isEditing(item) ? 'Auto-filled by system...' : interpolateTemplate(item.placeholder || '')"
                 :required="item.required"
                 :disabled="isFieldDisabled(item)"
                 class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
@@ -591,11 +685,11 @@ async function handleSubmit() {
             <!-- Select / Dropdown -->
             <template v-else-if="item.type === 'select' || item.type === 'dropdown'">
               <label class="block text-sm font-medium text-gray-900 mb-1.5">
-                {{ item.customLabel || item.label }}
+                {{ interpolateTemplate(item.customLabel || item.label) }}
                 <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
               </label>
               <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
-                {{ item.helpText || item.description }}
+                {{ interpolateTemplate(item.helpText || item.description) }}
               </p>
               <select
                 v-model="responses[survey.config.items.indexOf(item)]"
@@ -605,7 +699,7 @@ async function handleSubmit() {
                   missingOnCurrentPage.includes(survey.config.items.indexOf(item)) ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 ]"
               >
-                <option value="" disabled>{{ item.placeholder || 'Select an option...' }}</option>
+                <option value="" disabled>{{ interpolateTemplate(item.placeholder) || 'Select an option...' }}</option>
                 <option v-for="opt in (item.options || [])" :key="opt.value || opt" :value="opt.value || opt">
                   {{ opt.label || opt }}
                 </option>
@@ -615,11 +709,11 @@ async function handleSubmit() {
             <!-- Radio -->
             <template v-else-if="item.type === 'radio'">
               <label class="block text-sm font-medium text-gray-900 mb-2">
-                {{ item.customLabel || item.label }}
+                {{ interpolateTemplate(item.customLabel || item.label) }}
                 <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
               </label>
               <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
-                {{ item.helpText || item.description }}
+                {{ interpolateTemplate(item.helpText || item.description) }}
               </p>
               <div class="space-y-2">
                 <label
@@ -635,6 +729,66 @@ async function handleSubmit() {
                     class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
                   />
                   <span class="text-sm text-gray-700">{{ opt.label || opt }}</span>
+                </label>
+              </div>
+            </template>
+
+            <!-- Yes/No (custom field type) -->
+            <template v-else-if="(item.type === 'custom' || item.type === 'db_field') && item.inputType === 'yes_no'">
+              <label class="block text-sm font-medium text-gray-900 mb-2">
+                {{ interpolateTemplate(item.customLabel || item.label) }}
+                <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
+              </label>
+              <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
+                {{ interpolateTemplate(item.helpText || item.description) }}
+              </p>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    :name="`q_${survey.config.items.indexOf(item)}`"
+                    value="Yes"
+                    v-model="responses[survey.config.items.indexOf(item)]"
+                    class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                  />
+                  <span class="text-sm text-gray-700">Yes</span>
+                </label>
+                <label class="flex items-center gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                  <input
+                    type="radio"
+                    :name="`q_${survey.config.items.indexOf(item)}`"
+                    value="No"
+                    v-model="responses[survey.config.items.indexOf(item)]"
+                    class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                  />
+                  <span class="text-sm text-gray-700">No</span>
+                </label>
+              </div>
+            </template>
+
+            <!-- Multiple Choice (custom field type) -->
+            <template v-else-if="(item.type === 'custom' || item.type === 'db_field') && item.inputType === 'multiple_choice'">
+              <label class="block text-sm font-medium text-gray-900 mb-2">
+                {{ interpolateTemplate(item.customLabel || item.label) }}
+                <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
+              </label>
+              <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
+                {{ interpolateTemplate(item.helpText || item.description) }}
+              </p>
+              <div class="space-y-2">
+                <label
+                  v-for="(opt, oi) in (item.options || [])"
+                  :key="oi"
+                  class="flex items-center gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <input
+                    type="radio"
+                    :name="`q_${survey.config.items.indexOf(item)}`"
+                    :value="opt"
+                    v-model="responses[survey.config.items.indexOf(item)]"
+                    class="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                  />
+                  <span class="text-sm text-gray-700">{{ opt }}</span>
                 </label>
               </div>
             </template>
@@ -657,11 +811,11 @@ async function handleSubmit() {
             <!-- Checkbox Group -->
             <template v-else-if="item.type === 'checkboxGroup'">
               <label class="block text-sm font-medium text-gray-900 mb-2">
-                {{ item.customLabel || item.label }}
+                {{ interpolateTemplate(item.customLabel || item.label) }}
                 <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
               </label>
               <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
-                {{ item.helpText || item.description }}
+                {{ interpolateTemplate(item.helpText || item.description) }}
               </p>
               <div class="space-y-2">
                 <label
@@ -687,12 +841,12 @@ async function handleSubmit() {
                 <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
               </label>
               <p v-if="item.helpText || item.description" class="text-xs text-gray-500 mb-2">
-                {{ item.helpText || item.description }}
+                {{ interpolateTemplate(item.helpText || item.description) }}
               </p>
               <input
                 v-model="responses[survey.config.items.indexOf(item)]"
                 type="text"
-                :placeholder="item.placeholder || ''"
+                :placeholder="interpolateTemplate(item.placeholder || '')"
                 class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               />
             </template>

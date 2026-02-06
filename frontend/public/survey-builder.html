@@ -253,8 +253,12 @@
               </span>
 
               <!-- Label -->
-              <span class="text-sm text-gray-700 truncate flex-1">
-                {{ item.type === 'page_break' ? '─── Page Break ───' : (item.customLabel || item.label || item.content || 'Untitled') }}
+              <span class="text-sm text-gray-700 truncate flex-1 flex items-center gap-2">
+                <span>{{ item.type === 'page_break' ? '─── Page Break ───' : (item.customLabel || item.label || item.content || 'Untitled') }}</span>
+                <span v-if="item.type === 'page_break' && item.pageCondensed" class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-700 rounded">
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>
+                  Condensed
+                </span>
               </span>
 
               <!-- Required Star -->
@@ -285,6 +289,18 @@
               <template v-if="item.type === 'page_break'">
                 <div class="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-700">
                   Page breaks split the survey into multiple pages. Respondents will see "Next" and "Previous" buttons to navigate between pages.
+                </div>
+                <div class="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
+                  <div>
+                    <div class="text-xs font-medium text-gray-700">Condense Previous Page</div>
+                    <div class="text-xs text-gray-500 mt-0.5">Make all items before this break compact</div>
+                  </div>
+                  <button @click="item.pageCondensed = !item.pageCondensed"
+                    class="relative w-11 h-6 rounded-full transition-colors"
+                    :class="item.pageCondensed ? 'bg-indigo-500' : 'bg-gray-300'">
+                    <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                      :class="item.pageCondensed ? 'translate-x-5' : ''"></span>
+                  </button>
                 </div>
               </template>
 
@@ -432,11 +448,21 @@
 
       <!-- Preview Panel (Right) -->
       <div class="w-3/5 overflow-y-auto bg-gray-50 p-8">
-        <div class="max-w-2xl mx-auto space-y-6">
+        <div class="max-w-2xl mx-auto" :class="shouldCondense ? 'space-y-1' : 'space-y-6'">
           <!-- Preview Header -->
           <div class="flex items-center justify-between mb-2">
             <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">Live Preview</h2>
             <div class="flex items-center gap-3">
+              <!-- Condense Preview Toggle -->
+              <label class="flex items-center gap-1.5 cursor-pointer" title="Preview override - temporarily condense all pages">
+                <span class="text-xs font-medium" :class="shouldCondense ? 'text-indigo-600' : 'text-gray-400'">Preview Condensed</span>
+                <button @click="condensedMode = !condensedMode"
+                  class="relative w-9 h-5 rounded-full transition-colors"
+                  :class="shouldCondense ? 'bg-indigo-500' : 'bg-gray-300'">
+                  <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
+                    :class="shouldCondense ? 'translate-x-4' : ''"></span>
+                </button>
+              </label>
               <!-- Simulate Toggle -->
               <div class="flex items-center gap-2">
                 <button v-if="simulateMode" @click="resetSimulation"
@@ -471,7 +497,7 @@
           <!-- Form Preview -->
           <template v-if="previewMode === 'form'">
             <!-- Survey Title & Intro -->
-            <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
+            <div class="bg-white border border-gray-200 shadow-sm rounded-xl p-8">
               <h1 class="text-2xl font-bold text-gray-900">{{ interpolateTemplate(surveyConfig.meta.title) || 'Untitled Survey' }}</h1>
               <p v-if="surveyConfig.meta.introduction" class="mt-3 text-gray-600 text-sm leading-relaxed">{{ interpolateTemplate(surveyConfig.meta.introduction) }}</p>
             </div>
@@ -492,28 +518,28 @@
             </div>
 
             <!-- Empty State -->
-            <div v-if="!currentPageItems.length && !surveyConfig.items.length" class="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">
+            <div v-if="!itemsToDisplay.length && !surveyConfig.items.length" class="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">
               <p class="text-gray-400 text-sm">Add fields from the builder panel to see the preview.</p>
             </div>
 
             <!-- Empty Page State -->
-            <div v-if="!currentPageItems.length && surveyConfig.items.length" class="bg-white rounded-xl border border-dashed border-purple-300 p-12 text-center">
+            <div v-if="!itemsToDisplay.length && surveyConfig.items.length" class="bg-white rounded-xl border border-dashed border-purple-300 p-12 text-center">
               <svg class="w-10 h-10 mx-auto mb-3 text-purple-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/></svg>
               <p class="text-sm text-purple-600 font-medium">This page is empty</p>
               <p class="text-xs text-gray-400 mt-1">Add items before this page break or navigate to another page</p>
             </div>
 
             <!-- Survey Items -->
-            <template v-for="(item, idx) in currentPageItems" :key="item.id">
+            <template v-for="(item, idx) in itemsToDisplay" :key="item.id">
               <!-- Section Header -->
-              <div v-if="item.type === 'section_header'" v-show="isItemVisible(item)" class="pt-4 transition-all">
-                <h2 class="text-lg font-semibold text-gray-900 pb-2 border-b border-gray-200">{{ interpolateTemplate(item.content) || 'Section Title' }}</h2>
+              <div v-if="item.type === 'section_header'" v-show="isItemVisible(item)" :class="shouldCondense ? 'pt-0.5' : 'pt-4'" class="transition-all">
+                <h2 :class="shouldCondense ? 'text-xs font-semibold text-gray-900 pb-0.5 border-b border-gray-200' : 'text-lg font-semibold text-gray-900 pb-2 border-b border-gray-200'">{{ interpolateTemplate(item.content) || 'Section Title' }}</h2>
               </div>
 
               <!-- Instructions -->
-              <div v-else-if="item.type === 'instructions'" v-show="isItemVisible(item)" class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 transition-all">
-                <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                <p class="text-sm text-blue-800">{{ interpolateTemplate(item.content) || 'Instructions text...' }}</p>
+              <div v-else-if="item.type === 'instructions'" v-show="isItemVisible(item)" :class="shouldCondense ? 'bg-blue-50 border border-blue-200 rounded-md p-1.5 flex gap-1.5 transition-all' : 'bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 transition-all'">
+                <svg :class="shouldCondense ? 'w-3 h-3' : 'w-5 h-5'" class="text-blue-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <p :class="shouldCondense ? 'text-xs leading-tight' : 'text-sm'" class="text-blue-800">{{ interpolateTemplate(item.content) || 'Instructions text...' }}</p>
               </div>
 
               <!-- Due Date Group -->
@@ -542,9 +568,12 @@
               </div>
 
               <!-- Form Field -->
-              <div v-else v-show="isItemVisible(item)" class="bg-white rounded-xl border shadow-sm p-5 transition-all"
-                :class="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'border-green-200 bg-green-50/30' : 'border-gray-200'">
-                <div class="flex items-start justify-between mb-1.5">
+              <div v-else v-show="isItemVisible(item)" class="bg-white border shadow-sm transition-all"
+                :class="[
+                  item.prepopulated && !isPrepopulatedEditing(item.id) ? 'border-green-200 bg-green-50/30' : 'border-gray-200',
+                  shouldCondense ? 'rounded-md p-1.5 flex items-center gap-2' : 'rounded-xl p-5'
+                ]">
+                <div v-if="!shouldCondense" class="flex items-start justify-between mb-1.5">
                   <label class="block text-sm font-medium text-gray-700">
                     {{ interpolateTemplate(item.customLabel || item.label) || 'Untitled Question' }}
                     <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
@@ -564,7 +593,16 @@
                     Done
                   </button>
                 </div>
-                <p v-if="item.helpText" class="text-xs text-gray-500 mb-2">{{ interpolateTemplate(item.helpText) }}</p>
+
+                <!-- Condensed mode label -->
+                <label v-if="shouldCondense" class="text-xs font-medium text-gray-700 w-36 flex-shrink-0">
+                  {{ interpolateTemplate(item.customLabel || item.label) || 'Untitled Question' }}
+                  <span v-if="item.required" class="text-red-500 ml-0.5">*</span>
+                </label>
+
+                <div v-if="!shouldCondense && item.helpText" class="text-xs text-gray-500 mb-2">{{ interpolateTemplate(item.helpText) }}</div>
+
+                <div :class="shouldCondense ? 'flex-1' : ''">
 
                 <!-- Text input -->
                 <input v-if="['text', 'email', 'phone', 'url', 'number'].includes(item.inputType)"
@@ -572,8 +610,9 @@
                   :placeholder="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'Auto-filled by system...' : (item.placeholder || '')"
                   :disabled="!simulateMode || (item.prepopulated && !isPrepopulatedEditing(item.id))"
                   v-model="previewValues[item.id]"
-                  class="w-full px-3 py-2 text-sm border rounded-lg placeholder-gray-400"
+                  class="w-full border rounded-lg placeholder-gray-400"
                   :class="[
+                    condensedMode ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm',
                     simulateMode && (!item.prepopulated || isPrepopulatedEditing(item.id)) ? 'bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent' : '',
                     item.prepopulated && !isPrepopulatedEditing(item.id) ? 'bg-green-50 border-green-200 text-green-800 font-medium' : '',
                     !simulateMode ? 'bg-gray-50 border-gray-300' : ''
@@ -585,8 +624,9 @@
                   :placeholder="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'Auto-filled by system...' : item.placeholder"
                   :disabled="!simulateMode || (item.prepopulated && !isPrepopulatedEditing(item.id))"
                   v-model="previewValues[item.id]"
-                  class="w-full px-3 py-2 text-sm border rounded-lg placeholder-gray-400"
+                  class="w-full border rounded-lg placeholder-gray-400"
                   :class="[
+                    condensedMode ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm',
                     simulateMode && (!item.prepopulated || isPrepopulatedEditing(item.id)) ? 'bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent' : '',
                     item.prepopulated && !isPrepopulatedEditing(item.id) ? 'bg-green-50 border-green-200 text-green-800 font-medium' : '',
                     !simulateMode ? 'bg-gray-50 border-gray-300' : ''
@@ -594,12 +634,13 @@
 
                 <!-- Textarea -->
                 <textarea v-else-if="item.inputType === 'textarea'"
-                  rows="3"
+                  :rows="condensedMode ? '2' : '3'"
                   :placeholder="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'Auto-filled by system...' : (item.placeholder || '')"
                   :disabled="!simulateMode || (item.prepopulated && !isPrepopulatedEditing(item.id))"
                   v-model="previewValues[item.id]"
-                  class="w-full px-3 py-2 text-sm border rounded-lg placeholder-gray-400 resize-none"
+                  class="w-full border rounded-lg placeholder-gray-400 resize-none"
                   :class="[
+                    condensedMode ? 'px-2 py-1 text-xs' : 'px-3 py-2 text-sm',
                     simulateMode && (!item.prepopulated || isPrepopulatedEditing(item.id)) ? 'bg-white border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent' : '',
                     item.prepopulated && !isPrepopulatedEditing(item.id) ? 'bg-green-50 border-green-200 text-green-800 font-medium' : '',
                     !simulateMode ? 'bg-gray-50 border-gray-300' : ''
@@ -631,6 +672,23 @@
                     <span class="text-sm" :class="item.prepopulated && !isPrepopulatedEditing(item.id) ? 'text-green-800 font-medium' : 'text-gray-700'">No</span>
                   </label>
                 </div>
+                </div>
+
+                <!-- Condensed mode edit button for prepopulated fields -->
+                <button v-if="shouldCondense && item.prepopulated && !isPrepopulatedEditing(item.id)"
+                  @click="togglePrepopulatedEdit(item.id)"
+                  class="flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 text-xs font-medium bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                  title="Edit pre-filled value">
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  <span class="text-[10px] leading-none">Edit</span>
+                </button>
+                <button v-if="shouldCondense && item.prepopulated && isPrepopulatedEditing(item.id)"
+                  @click="togglePrepopulatedEdit(item.id)"
+                  class="flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1 text-xs font-medium bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                  title="Done editing">
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                  <span class="text-[10px] leading-none">Done</span>
+                </button>
               </div>
             </template>
 
@@ -903,6 +961,7 @@
         const showTemplateVars = ref(false)
         const currentPage = ref(0)
         const editingPrepopulated = ref({})
+        const condensedMode = ref(false)
 
         // ─── Template Variables ───
         const TEMPLATE_VARIABLES = [
@@ -961,6 +1020,31 @@
         const currentPageItems = computed(() => pages.value[currentPage.value] || [])
         const isFirstPage = computed(() => currentPage.value === 0)
         const isLastPage = computed(() => currentPage.value === totalPages.value - 1)
+
+        // Items to display - just current page
+        const itemsToDisplay = computed(() => currentPageItems.value)
+
+        // Check if a page is set to be condensed by finding the page break after it
+        const isPageCondensed = (pageIndex) => {
+          // Find all page breaks
+          const pageBreaks = surveyConfig.value.items.filter(item => item.type === 'page_break')
+
+          // If checking the last page and no page breaks, not condensed
+          if (pageIndex >= pageBreaks.length) return false
+
+          // Get the page break that comes after this page
+          const pageBreak = pageBreaks[pageIndex]
+          return pageBreak?.pageCondensed || false
+        }
+
+        // Check if current page should be condensed
+        const shouldCondense = computed(() => {
+          // Preview toggle overrides everything
+          if (condensedMode.value) return true
+
+          // Check if current page has a page break marking it as condensed
+          return isPageCondensed(currentPage.value)
+        })
 
         // ─── localStorage ───
         onMounted(() => {
@@ -1078,7 +1162,8 @@
         function addPageBreak() {
           const item = {
             id: crypto.randomUUID(),
-            type: 'page_break'
+            type: 'page_break',
+            pageCondensed: false
           }
           surveyConfig.value.items.push(item)
           expandedItemId.value = item.id
@@ -1317,12 +1402,16 @@
           simulateMode,
           previewValues,
           editingPrepopulated,
+          condensedMode,
+          shouldCondense,
+          isPageCondensed,
           togglePrepopulatedEdit,
           isPrepopulatedEditing,
           itemCount,
           pages,
           totalPages,
           currentPageItems,
+          itemsToDisplay,
           currentPage,
           isFirstPage,
           isLastPage,
