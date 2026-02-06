@@ -44,7 +44,6 @@
             <svg class="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
           </div>
           <h1 class="text-lg font-semibold text-gray-900">Survey Builder</h1>
-          <span class="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full font-medium">Mockup</span>
         </div>
         <div class="flex items-center gap-2">
           <span class="text-sm text-gray-500">{{ itemCount }} item{{ itemCount !== 1 ? 's' : '' }} in survey</span>
@@ -725,7 +724,9 @@
       hash: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>',
       list: '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
       'toggle-left': '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="5" width="22" height="14" rx="7" ry="7"/><circle cx="8" cy="12" r="3"/></svg>',
-      'align-left': '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>'
+      'align-left': '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>',
+      'credit-card': '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
+      'upload': '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
     }
 
     // ─── DB Field Registry ───
@@ -794,6 +795,55 @@
           { dbField: 'default_delq_collector', label: 'Default Delinquent Collector', inputType: 'text' },
           { dbField: 'default_escrow_collector', label: 'Default Escrow Collector', inputType: 'text' }
         ]
+      },
+      payment: {
+        label: 'Payment Information',
+        icon: 'credit-card',
+        fields: [
+          // Providing Amounts
+          { dbField: 'pmt_preferred_method', label: 'Preferred Method of Providing Amounts', inputType: 'text' },
+          { dbField: 'pmt_amounts_contact_info', label: 'Amounts Contact Info (URL/Phone/Email)', inputType: 'textarea' },
+
+          // Bulk Payment & Parcels
+          { dbField: 'pmt_bulk_upload_allowed', label: 'Bulk TK# Upload Allowed?', inputType: 'yes_no' },
+          { dbField: 'pmt_bulk_upload_format', label: 'Bulk Upload Format', inputType: 'file_upload' },
+          { dbField: 'pmt_tax_roll_required', label: 'Tax Roll Required for Bulk Payment?', inputType: 'yes_no' },
+          { dbField: 'pmt_tax_roll_cost', label: 'Tax Roll Cost', inputType: 'text' },
+
+          // Third Party Payment Company
+          { dbField: 'pmt_third_party_name', label: 'Third Party Agency Name', inputType: 'text' },
+          { dbField: 'pmt_third_party_fee', label: 'Third Party Fee per Parcel', inputType: 'text' },
+          { dbField: 'pmt_third_party_file_format', label: 'Third Party File Format', inputType: 'file_upload' },
+
+          // Tax Bill Requirements
+          { dbField: 'pmt_original_bill_required', label: 'Original Tax Bill Required?', inputType: 'yes_no' },
+          { dbField: 'pmt_how_to_obtain_bill', label: 'How to Obtain Tax Bill', inputType: 'text' },
+          { dbField: 'pmt_duplicate_bill_fee_yn', label: 'Duplicate Tax Bill Fee?', inputType: 'yes_no' },
+          { dbField: 'pmt_duplicate_bill_fee', label: 'Duplicate Bill Fee Amount', inputType: 'text' },
+
+          // PreCommit
+          { dbField: 'pmt_precommit_required', label: 'PreCommit Required?', inputType: 'yes_no' },
+          { dbField: 'pmt_precommit_file_format', label: 'PreCommit File Format', inputType: 'file_upload' },
+
+          // Payment Methods (note: checkboxes handled differently in frontend)
+          { dbField: 'pmt_method_wire', label: 'Accepts Wire Transfer?', inputType: 'yes_no' },
+          { dbField: 'pmt_method_ach', label: 'Accepts ACH?', inputType: 'yes_no' },
+          { dbField: 'pmt_method_check', label: 'Accepts Check?', inputType: 'yes_no' },
+          { dbField: 'pmt_method_other', label: 'Other Payment Method', inputType: 'text' },
+
+          // Payment Instructions
+          { dbField: 'pmt_wire_instructions', label: 'Wire Transfer Instructions', inputType: 'textarea' },
+          { dbField: 'pmt_ach_instructions', label: 'ACH Instructions', inputType: 'textarea' },
+          { dbField: 'pmt_check_instructions', label: 'Check Instructions', inputType: 'textarea' },
+          { dbField: 'pmt_other_instructions', label: 'Other Payment Instructions', inputType: 'textarea' },
+
+          // Payment Contact
+          { dbField: 'pmt_wire_ach_contact_name', label: 'Wire/ACH Contact Name', inputType: 'text' },
+          { dbField: 'pmt_wire_ach_contact_info', label: 'Wire/ACH Contact Email/Phone', inputType: 'text' },
+
+          // General Payment Notes
+          { dbField: 'pmt_notes', label: 'Payment Notes', inputType: 'textarea' }
+        ]
       }
     }
 
@@ -804,7 +854,8 @@
       { value: 'number', label: 'Number', icon: 'hash' },
       { value: 'date', label: 'Date', icon: 'calendar' },
       { value: 'multiple_choice', label: 'Multiple Choice', icon: 'list' },
-      { value: 'yes_no', label: 'Yes / No', icon: 'toggle-left' }
+      { value: 'yes_no', label: 'Yes / No', icon: 'toggle-left' },
+      { value: 'file_upload', label: 'File Upload', icon: 'upload' }
     ]
 
     // ─── Condition Operators ───
