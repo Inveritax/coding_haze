@@ -543,12 +543,8 @@ async function handleSubmit() {
 
         <!-- Survey Items -->
         <div class="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
-          <div
-            v-for="(item) in currentItems"
-            :key="item.id || survey.config.items.indexOf(item)"
-            v-if="isItemVisible(item)"
-            class="p-6"
-          >
+          <template v-for="(item) in currentItems" :key="item.id || survey.config.items.indexOf(item)">
+            <div v-if="isItemVisible(item)" class="p-6">
             <!-- Section Header -->
             <template v-if="item.type === 'section_header'">
               <h3 class="text-lg font-semibold text-gray-900">{{ interpolateTemplate(item.content || item.label) }}</h3>
@@ -853,7 +849,8 @@ async function handleSubmit() {
                 class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               />
             </template>
-          </div>
+            </div>
+          </template>
         </div>
 
         <!-- Pagination Controls -->
