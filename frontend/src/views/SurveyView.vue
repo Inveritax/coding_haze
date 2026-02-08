@@ -216,6 +216,9 @@ function isTextarea(item) {
 
 // Check if item should be visible based on conditional visibility rules
 function isItemVisible(item) {
+  // Safety check - if item is undefined, hide it
+  if (!item) return false
+
   // If no condition, always visible
   if (!item.condition) return true
   if (!item.condition.sourceItemId) return true
